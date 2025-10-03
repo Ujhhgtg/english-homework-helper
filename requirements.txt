@@ -3,3 +3,7 @@ prompt_toolkit
 rich
 openai-whisper
 openai
+torch
+torchvision
+torchaudio
+python-telegram-bot

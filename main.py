@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import asyncio
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import (
@@ -12,7 +13,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 import time
 import atexit
 from rich import print
-from rich.progress import Progress
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import choice
@@ -21,6 +21,16 @@ import urllib.request
 import threading
 import whisper
 from pathlib import Path
+import telegram
+from telegram import Update, ForceReply
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    ConversationHandler,
+)
 
 from constants import *
 from models.homework_record import HomeworkRecord
@@ -28,10 +38,9 @@ from models.homework_status import HomeworkStatus
 from models.ai_client import AIClient
 from local.credentials import CREDENTIALS_LIST
 from local.ai_clients import AI_CLIENT_LIST
+from local.telegram_bot_token import TELEGRAM_BOT_TOKEN
 
 
-url = "https://admin.jeedu.net/login"
-url_homework_list = "https://admin.jeedu.net/exam/studentTaskList"
 driver_options = FirefoxOptions()
 driver_options.binary_location = "/usr/bin/firefox"
 driver = webdriver.Firefox(options=driver_options)
@@ -246,7 +255,7 @@ def download_audio(driver, index: int, record: HomeworkRecord):
                 f"<error> failed to download audio using urllib.request: {download_e}"
             )
 
-        driver.get(url_homework_list)
+        driver.get(URL_HOMEWORK_LIST)
         wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
         )
@@ -294,7 +303,7 @@ def transcribe_audio(index: int):
         print("<info> Whisper model already loaded")
 
     print(f"<info> transcribing audio file: {audio_file} (this may take a while)...")
-    result = whisper_model.transcribe(audio_file, language="en")
+    result = whisper_model.transcribe(audio_file, language="en", verbose=False)
     transcription = result.get("text", None)
     if transcription is None or (transcription is str and transcription.strip() == ""):
         print(f"<error> transcription failed or returned empty result")
@@ -302,10 +311,10 @@ def transcribe_audio(index: int):
 
     transcription_file = f"{audio_file}.txt"
     with open(transcription_file, "w", encoding="utf-8") as f:
-        if type(transcription) is str:
+        if isinstance(transcription, str):
             f.write(transcription)
             print(f"<info> transcription successful! saving to '{transcription_file}'")
-        if type(transcription) is list:
+        if isinstance(transcription, list):
             f.write("\n".join(transcription))
             print(f"<info> transcription successful! saved to '{transcription_file}'")
 
@@ -343,7 +352,7 @@ def get_text(driver, index: int, record: HomeworkRecord) -> str | None:
         )
         homework_text = paper_element.text
 
-        driver.get(url_homework_list)
+        driver.get(URL_HOMEWORK_LIST)
         wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
         )
@@ -355,10 +364,116 @@ def get_text(driver, index: int, record: HomeworkRecord) -> str | None:
         return None
 
 
+# hw_list: list[HomeworkRecord] = []
+
+
+# async def command_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+#     global hw_list
+
+#     hw_list = parse_homework_list(driver)
+#     if not hw_list:
+#         # Simple message for no homework, no special formatting needed
+#         await context.bot.send_message(
+#             chat_id=update.effective_chat.id,
+#             text="No homework items found \\(Phew\\!\\)",  # Escaping the parentheses in MarkdownV2
+#         )
+#         return
+
+#     # --- Formatting the Homework List with MarkdownV2 ---
+
+#     # Header: Bold and use an emoji
+#     message_lines = ["*📚 Homework List 📋*"]
+
+#     for i, hw in enumerate(hw_list):
+#         # Determine status color/emoji
+#         status_text = hw.status.value if hw.status else "Unknown"
+#         if hw.status == HomeworkStatus.COMPLETED:
+#             status_emoji = "✅"
+#         elif (
+#             hw.status == HomeworkStatus.NOT_COMPLETED
+#             or hw.status == HomeworkStatus.MAKE_UP
+#             or hw.status == HomeworkStatus.IN_PROGRESS
+#         ):
+#             status_emoji = "⏳"
+#         else:
+#             status_emoji = "❓"
+
+#         # Use 'monospace' for scores/status to align them and make them stand out
+#         status_score_info = (
+#             f"Status: `{status_text}` \\| Score: `{hw.current_score}/{hw.total_score}`"
+#         )
+
+#         # Combine: 1. Title - Status: ... | Score: ...
+#         message_lines.append(
+#             f"{i+1}\\. {status_emoji} `{hw.title.replace("-", "\\-")}`\n    {status_score_info}"
+#         )
+
+#     # Join lines, ensuring newlines are correctly handled in MarkdownV2
+#     message = "\n\n".join(message_lines)
+
+#     await context.bot.send_message(
+#         chat_id=update.effective_chat.id,
+#         text=message,
+#         parse_mode="MarkdownV2",  # IMPORTANT: Specify the parsing mode
+#     )
+
+
+# async def command_download_audio(
+#     update: Update, context: ContextTypes.DEFAULT_TYPE
+# ) -> None:
+#     global hw_list
+
+#     chat_id = update.effective_chat.id
+
+#     if not context.args:
+#         await context.bot.send_message(
+#             chat_id=chat_id,
+#             text="Please provide a URL after the command, e.g., `/download_audio <url>`.",
+#         )
+#         return
+
+#     index = context.args[0]
+#     try:
+#         index = int(index)
+#     except ValueError:
+#         await context.bot.send_message(
+#             chat_id=update.effective_chat.id,
+#             text="Invalid index. Please provide a valid homework index.",
+#         )
+#         return
+
+#     print(index)
+
+#     if index < 0 or index >= len(hw_list):
+#         await context.bot.send_message(
+#             chat_id=update.effective_chat.id,
+#             text=f"Index out of range: {index}",
+#         )
+#         return
+
+#     download_audio(driver, index, hw_list[index])
+
+#     await context.bot.send_message(
+#         chat_id=update.effective_chat.id,
+#         text=f"Audio for homework index {index} downloaded successfully.",
+#     )
+#     await context.bot.send_audio(
+#         chat_id=update.effective_chat.id,
+#         audio=open(f"cache/homework_{index}_audio.mp3", "rb"),
+#         caption=f"Here is the audio for homework index {index}.",
+#     )
+
+
 def main():
     print("--- english homework helper ---")
     print("--- by: ujhhgtg ---")
-    print("--- github:  ---")
+    print("--- github: https://github.com/Ujhhgtg/english-homework-helper ---")
+
+    # print("--- step: start telegram bot ---")
+    # application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+
+    # application.add_handler(CommandHandler("list", command_list))
+    # application.add_handler(CommandHandler("download_audio", command_download_audio))
 
     print("--- step: initialize ---")
     atexit.register(_close_browser_on_exit)
@@ -366,21 +481,23 @@ def main():
     Path("./cache/").mkdir(parents=True, exist_ok=True)
     print("<info> created cache directory")
 
-    driver.get(url)
-    print(f"<info> navigated to: {url}")
+    driver.get(URL_LOGIN)
+    print(f"<info> navigated to: {URL_LOGIN}")
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)))
 
     login(driver)
     time.sleep(2)
 
-    driver.get(url_homework_list)
-    print(f"<info> navigated to: {url_homework_list}")
+    driver.get(URL_HOMEWORK_LIST)
+    print(f"<info> navigated to: {URL_HOMEWORK_LIST}")
     wait.until(
         EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
     )
 
     hw_list: list[HomeworkRecord] = []
     ai_client: AIClient | None = None
+
+    # application.run_polling(allowed_updates=Update.ALL_TYPES)
 
     print("--- entering interactive mode ---")
 

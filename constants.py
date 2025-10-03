@@ -1,3 +1,6 @@
+URL_LOGIN = "https://admin.jeedu.net/login"
+URL_HOMEWORK_LIST = "https://admin.jeedu.net/exam/studentTaskList"
+
 START_TIME_SELECTOR = "td:nth-child(1) > div:nth-child(1) > span:nth-child(1)"
 END_TIME_SELECTOR = "td:nth-child(2) > div:nth-child(1) > span:nth-child(1)"
 TITLE_SELECTOR = "td:nth-child(3) > div:nth-child(1) > span:nth-child(1)"
@@ -31,4 +34,5 @@ PASSWORD_SELECTOR = (
     "div:nth-child(3) > div:nth-child(1) > div:nth-child(1) > input:nth-child(1)"
 )
 SLIDER_HANDLE_SELECTOR = ".el-icon-d-arrow-right"
+
 DRAG_DISTANCE_PIXELS = 300

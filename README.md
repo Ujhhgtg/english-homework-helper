@@ -37,9 +37,19 @@ Rename `local/credentials.py.example` to `local/credentials.py` and fill in your
 ### 3. Configure OpenAI API (Optional)
 
 > [!NOTE]
-> This step is optional. However, if you don't configure AI, you would not be able to use AI-based features.
+> This step is optional. However, if you don't configure this, you would not be able to use AI-based features.
 
 Rename `local/ai_clients.py.example` to `local/ai_clients.py` and fill in your api urls & keys.
+
+### 4. Configure Telegram Bot (Optional)
+
+> [!NOTE]
+> This step is optional. However, if you don't configure this, you would not be able to run the Telegram Bot.
+
+> [!WARNING]
+> The bot is currently under development, its features are incomplete and is not available for use (you can find it in the comments though).
+
+Rename `local/telegram_bot_token.py.example` to `local/telegram_bot_token.py` and fill in your token.
 
 ## 💻 Usage
 

@@ -19,7 +19,7 @@ from prompt_toolkit.shortcuts import choice
 from prompt_toolkit.completion import WordCompleter
 import urllib.request
 import threading
-import faster_whisper
+import whisper
 from pathlib import Path
 
 from constants import *
@@ -36,7 +36,7 @@ driver_options = FirefoxOptions()
 driver_options.binary_location = "/usr/bin/firefox"
 driver = webdriver.Firefox(options=driver_options)
 wait = WebDriverWait(driver, 15)
-whisper_model: faster_whisper.WhisperModel | None = None
+whisper_model: whisper.model.Whisper | None = None
 session = PromptSession()
 
 
@@ -261,28 +261,53 @@ def transcribe_audio(index: int):
 
     audio_file = f"cache/homework_{index}_audio.mp3"
 
+    # global whisper_model
+    # if whisper_model is None:
+    #     print("<info> loading Whisper model (this may take a while)...")
+    #     whisper_model = faster_whisper.WhisperModel(
+    #         "large", device="cuda", compute_type="float16"
+    #     )
+    # else:
+    #     print("<info> Whisper model already loaded")
+
+    # print(f"<info> transcribing audio file: {audio_file} (this may take a while)...")
+    # segments, info = whisper_model.transcribe(audio_file, language="en", beam_size=5)
+    # total_duration = round(info.duration, 2)
+    # transcription_file = f"{audio_file}.txt"
+
+    # with open(transcription_file, "w", encoding="utf-8") as f:
+    #     with Progress() as progress:
+    #         task_id = progress.add_task(
+    #             "[bold_cyan]Transcribing...", total=total_duration
+    #         )
+    #         for segment in segments:
+    #             progress.update(task_id, completed=round(segment.end, 2))
+    #             f.write(segment.text)
+
+    # print(f"<info> transcription successful! saved to '{transcription_file}'")
+
     global whisper_model
     if whisper_model is None:
         print("<info> loading Whisper model (this may take a while)...")
-        whisper_model = faster_whisper.WhisperModel("large")
+        whisper_model = whisper.load_model("large")
     else:
         print("<info> Whisper model already loaded")
 
     print(f"<info> transcribing audio file: {audio_file} (this may take a while)...")
-    segments, info = whisper_model.transcribe(audio_file, language="en", beam_size=5)
-    total_duration = round(info.duration, 2)
+    result = whisper_model.transcribe(audio_file, language="en")
+    transcription = result.get("text", None)
+    if transcription is None or (transcription is str and transcription.strip() == ""):
+        print(f"<error> transcription failed or returned empty result")
+        return
+
     transcription_file = f"{audio_file}.txt"
-
     with open(transcription_file, "w", encoding="utf-8") as f:
-        with Progress() as progress:
-            task_id = progress.add_task(
-                "[bold_cyan]Transcribing...", total=total_duration
-            )
-            for segment in segments:
-                progress.update(task_id, completed=round(segment.end, 2))
-                f.write(segment.text)
-
-    print(f"<info> transcription successful! saved to '{transcription_file}'")
+        if type(transcription) is str:
+            f.write(transcription)
+            print(f"<info> transcription successful! saving to '{transcription_file}'")
+        if type(transcription) is list:
+            f.write("\n".join(transcription))
+            print(f"<info> transcription successful! saved to '{transcription_file}'")
 
 
 def get_text(driver, index: int, record: HomeworkRecord) -> str | None:

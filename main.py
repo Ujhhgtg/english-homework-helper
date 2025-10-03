@@ -273,7 +273,7 @@ def download_audio(driver, index: int, record: HomeworkRecord):
             )
             return
 
-        filename = f"{f"homework_{index}"}_audio.mp3"
+        filename = f"cache/homework_{index}_audio.mp3"
         try:
             print(f"<info> downloading audio from: {audio_url}")
             urllib.request.urlretrieve(audio_url, filename)
@@ -296,7 +296,7 @@ def download_audio(driver, index: int, record: HomeworkRecord):
 def transcribe_audio(index: int):
     print(f"--- step: transcribe audio of index {index} ---")
 
-    audio_file = f"homework_{index}_audio.mp3"
+    audio_file = f"cache/homework_{index}_audio.mp3"
 
     global whisper_model
     if whisper_model is None:
@@ -395,96 +395,92 @@ def main():
 
     print("--- entering interactive mode ---")
 
-    with patch_stdout():
-        while True:
-            user_input = (
-                session.prompt(
-                    "ehh> ",
-                    completer=WordCompleter(
-                        [
-                            "download_audio",
-                            "transcribe_audio",
-                            "get_text",
-                            "help",
-                            "list",
-                            "exit",
-                            "quit",
-                            "stop",
-                            "bye",
-                        ],
-                        ignore_case=True,
-                    ),
-                )
-                .strip()
-                .lower()
+    # with patch_stdout():
+    while True:
+        user_input = (
+            session.prompt(
+                "ehh> ",
+                completer=WordCompleter(
+                    [
+                        "download_audio",
+                        "transcribe_audio",
+                        "get_text",
+                        "help",
+                        "list",
+                        "exit",
+                        "quit",
+                        "stop",
+                        "bye",
+                    ],
+                    ignore_case=True,
+                ),
             )
-            try:
-                match user_input:
-                    case "help":
-                        print("available commands:")
-                        print("  download_audio - download audio of a homework item")
+            .strip()
+            .lower()
+        )
+        try:
+            match user_input:
+                case "help":
+                    print("available commands:")
+                    print("  download_audio - download audio of a homework item")
+                    print(
+                        "  transcribe_audio - transcribe downloaded audio using Whisper"
+                    )
+                    print("  get_text - get text content of a homework item")
+                    print("  help - show this help message")
+                    print("  list - list all homework items")
+                    print("  exit, quit, stop, bye - exit the program")
+
+                case "list":
+                    hw_list = parse_homework_list(driver)
+
+                case "download_audio":
+                    index = int(
+                        session.prompt("homework index to download audio: ").strip()
+                    )
+                    if index < 0 or index >= len(hw_list):
+                        print(f"<error> index out of range: {index}")
+                        break
+
+                    download_audio(driver, index, hw_list[index])
+
+                case "transcribe_audio":
+                    index = int(
+                        session.prompt("homework index to transcribe audio: ").strip()
+                    )
+                    if index < 0 or index >= len(hw_list):
+                        print(f"<error> index out of range: {index}")
+                        break
+
+                    audio_file = f"homework_{index}_audio.mp3"
+
+                    if not Path(audio_file).is_file():
                         print(
-                            "  transcribe_audio - transcribe downloaded audio using Whisper"
+                            f"<error> audio file for index {index} not found; please download it first"
                         )
-                        print("  get_text - get text content of a homework item")
-                        print("  help - show this help message")
-                        print("  list - list all homework items")
-                        print("  exit, quit, stop, bye - exit the program")
+                        break
 
-                    case "list":
-                        hw_list = parse_homework_list(driver)
+                    transcribe_audio(index)
 
-                    case "download_audio":
-                        index = int(
-                            session.prompt("homework index to download audio: ").strip()
-                        )
-                        if index < 0 or index >= len(hw_list):
-                            print(f"<error> index out of range: {index}")
-                            break
+                case "get_text":
+                    index = int(session.prompt("homework index to get text: ").strip())
+                    if index < 0 or index >= len(hw_list):
+                        print(f"<error> index out of range: {index}")
+                        break
 
-                        download_audio(driver, index, hw_list[index])
+                    get_text(driver, index, hw_list[index])
 
-                    case "transcribe_audio":
-                        index = int(
-                            session.prompt(
-                                "homework index to transcribe audio: "
-                            ).strip()
-                        )
-                        if index < 0 or index >= len(hw_list):
-                            print(f"<error> index out of range: {index}")
-                            break
+                case "exit" | "quit" | "stop" | "bye":
+                    print("<info> exiting program...")
+                    exit(0)
 
-                        audio_file = f"homework_{index}_audio.mp3"
+                case "":
+                    ...
 
-                        if not Path(audio_file).is_file():
-                            print(
-                                f"<error> audio file for index {index} not found; please download it first"
-                            )
-                            break
-
-                        transcribe_audio(index)
-
-                    case "get_text":
-                        index = int(
-                            session.prompt("homework index to get text: ").strip()
-                        )
-                        if index < 0 or index >= len(hw_list):
-                            print(f"<error> index out of range: {index}")
-                            break
-
-                        get_text(driver, index, hw_list[index])
-
-                    case "exit" | "quit" | "stop" | "bye":
-                        print("<info> exiting program[default]...[/default]")
-                        exit(0)
-
-                    case "":
-                        ...
-
-                    case _:
-                        print(f"<info> unrecognized command: '{user_input}'")
-            except KeyboardInterrupt:
-                continue
+                case _:
+                    print(f"<info> unrecognized command: '{user_input}'")
+        except KeyboardInterrupt:
+            continue
 
 
 if __name__ == "__main__":

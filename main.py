@@ -25,7 +25,7 @@ from pathlib import Path
 
 from models.homework_record import HomeworkRecord
 from models.homework_status import HomeworkStatus
-from local.default_credentials import DEFAULT_CREDENTIALS_LIST
+from local.credentials import CREDENTIALS_LIST
 
 # -- login page --
 SCHOOL_SELECTOR = ".el-select > div:nth-child(1) > input:nth-child(1)"
@@ -119,13 +119,11 @@ def login(driver):
         options=list(
             map(
                 lambda c: (c.username, f"{c.school} / {c.username} / {c.password}"),
-                DEFAULT_CREDENTIALS_LIST,
+                CREDENTIALS_LIST,
             )
         ),
     )
-    credentials = next(
-        c for c in DEFAULT_CREDENTIALS_LIST if c.username == credentials_choice
-    )
+    credentials = next(c for c in CREDENTIALS_LIST if c.username == credentials_choice)
 
     school_string = credentials.school
     school_field = driver.find_element(By.CSS_SELECTOR, SCHOOL_SELECTOR)

@@ -1,0 +1,493 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import (
+    Options as FirefoxOptions,
+)
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains  # Import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+import time
+import atexit
+
+# from prompt_toolkit import print_formatted_text as print
+from rich import print
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
+from prompt_toolkit.shortcuts import choice
+from prompt_toolkit.completion import WordCompleter
+import urllib.request
+import threading
+import whisper
+from pathlib import Path
+
+from models.homework_record import HomeworkRecord
+from models.homework_status import HomeworkStatus
+from local.default_credentials import DEFAULT_CREDENTIALS_LIST
+
+# -- login page --
+SCHOOL_SELECTOR = ".el-select > div:nth-child(1) > input:nth-child(1)"
+SCHOOL_ITEM_SELECTOR = ".el-select-dropdown__item > span:nth-child(1)"
+ACCOUNT_SELECTOR = (
+    "div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > input:nth-child(1)"
+)
+PASSWORD_SELECTOR = (
+    "div:nth-child(3) > div:nth-child(1) > div:nth-child(1) > input:nth-child(1)"
+)
+SLIDER_HANDLE_SELECTOR = ".el-icon-d-arrow-right"
+LOGIN_BUTTON_SELECTOR = "div.el-form-item:nth-child(7) > div:nth-child(1) > button:nth-child(1) > span:nth-child(1) > span:nth-child(1)"
+
+HOMEWORK_TABLE_SELECTOR = "tr.el-table__row"
+
+# -- homework list page --
+START_TIME_SELECTOR = "td:nth-child(1) > div:nth-child(1) > span:nth-child(1)"
+END_TIME_SELECTOR = "td:nth-child(2) > div:nth-child(1) > span:nth-child(1)"
+TITLE_SELECTOR = "td:nth-child(3) > div:nth-child(1) > span:nth-child(1)"
+TEACHER_SELECTOR = "td:nth-child(4) > div:nth-child(1)"
+PASS_SCORE_SELECTOR = "td:nth-child(5) > div:nth-child(1) > span:nth-child(1)"
+CURRENT_SCORE_SELECTOR = (
+    "td:nth-child(6) > div:nth-child(1) > span:nth-child(1) > span:nth-child(1)"
+)
+TOTAL_SCORE_SELECTOR = (
+    "td:nth-child(6) > div:nth-child(1) > span:nth-child(1) > span:nth-child(2)"
+)
+IS_PASS_SELECTOR = "td:nth-child(7) > div:nth-child(1) > span:nth-child(1)"
+TEACHER_WORDS_SELECTOR = "td:nth-child(9) > div:nth-child(1)"
+STATUS_SELECTOR = (
+    "td:nth-child(11) > div:nth-child(1) > button:nth-child(1) > span:nth-child(1)"
+)
+VIEW_COMPLETED_BUTTON_SELECTOR = (
+    "td:nth-child(12) > div:nth-child(1) > div:nth-child(1) > button:nth-child(1)"
+)
+VIEW_ORIGINAL_BUTTON_SELECTOR = (
+    "td:nth-child(12) > div:nth-child(1) > div:nth-child(1) > button:nth-child(2)"
+)
+
+DRAG_DISTANCE_PIXELS = 300
+FIREFOX_PATH = "/usr/bin/firefox"
+
+url = "https://admin.jeedu.net/login"
+url_homework_list = "https://admin.jeedu.net/exam/studentTaskList"
+driver_options = FirefoxOptions()
+driver_options.binary_location = FIREFOX_PATH
+driver = webdriver.Firefox(options=driver_options)
+wait = WebDriverWait(driver, 15)
+whisper_model: whisper.model.Whisper | None = None
+session = PromptSession()
+
+
+def _close_browser_on_exit():
+    global driver
+    if driver:
+        try:
+            driver.current_url
+            driver.quit()
+            print("<info> atexit: firefox browser closed automatically")
+        except Exception:
+            pass
+
+
+def _safe_get_text(element, selector: str):
+    """Safely finds and returns the text of a child element, returns None on failure."""
+    try:
+        # Use a dot prefix for relative CSS selectors when using find_element
+        # Since the elements are nested within the table row, we use the relative selector
+        return element.find_element(By.CSS_SELECTOR, selector).text
+    except:
+        return None
+
+
+def _get_status_enum(status_text: str | None) -> HomeworkStatus | None:
+    """Converts the scraped status string to the HomeworkStatus Enum."""
+    if not status_text:
+        return None
+
+    for member in HomeworkStatus:
+        if member.value == status_text:
+            return member
+
+    return None
+
+
+def login(driver):
+    print("--- step: login ---")
+
+    credentials_choice = choice(
+        "select credentials to use:",
+        options=list(
+            map(
+                lambda c: (c.username, f"{c.school} / {c.username} / {c.password}"),
+                DEFAULT_CREDENTIALS_LIST,
+            )
+        ),
+    )
+    credentials = next(
+        c for c in DEFAULT_CREDENTIALS_LIST if c.username == credentials_choice
+    )
+
+    school_string = credentials.school
+    school_field = driver.find_element(By.CSS_SELECTOR, SCHOOL_SELECTOR)
+    # school_field.click()
+    school_field.send_keys(school_string)
+    print(f"<info> entered '{school_string}' into school field")
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR)))
+    school_item = driver.find_element(By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR)
+    school_item.click()
+    print(f"<info> selected school item")
+
+    account_string = credentials.username
+    account_field = driver.find_element(By.CSS_SELECTOR, ACCOUNT_SELECTOR)
+    account_field.send_keys(account_string)
+    print(f"<info> entered '{account_string}' into account field")
+
+    password_string = credentials.password
+    password_field = driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR)
+    password_field.send_keys(password_string)
+    print(f"<info> entered '{password_string}' into password field")
+
+    slider_handle = wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, SLIDER_HANDLE_SELECTOR))
+    )
+    actions = ActionChains(driver)
+    actions.click_and_hold(slider_handle).move_by_offset(
+        DRAG_DISTANCE_PIXELS, 0
+    ).release().perform()
+    print(
+        f"<info> dragged slider {DRAG_DISTANCE_PIXELS} pixels to the right (x-offset)"
+    )
+
+    login_button = driver.find_element(By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)
+    login_button.click()
+
+
+def parse_homework_list(driver) -> list[HomeworkRecord]:
+    """Finds and extracts data from all homework rows on the current page (table structure)."""
+    print("--- step: parse homework list ---")
+    homework_records: list[HomeworkRecord] = []
+
+    try:
+        wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
+        )
+
+        homework_rows = driver.find_elements(By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR)
+
+        if not homework_rows:
+            print(
+                "<warning> no homework items found using selector:",
+                HOMEWORK_TABLE_SELECTOR,
+            )
+            return []
+
+        print(f"<info> found {len(homework_rows)} homework items to parse")
+
+        for i, row in enumerate(homework_rows):
+            title = _safe_get_text(row, TITLE_SELECTOR)
+            start_time = _safe_get_text(row, START_TIME_SELECTOR)
+            end_time = _safe_get_text(row, END_TIME_SELECTOR)
+            teacher_name = _safe_get_text(row, TEACHER_SELECTOR)
+            pass_score = _safe_get_text(row, PASS_SCORE_SELECTOR)
+            current_score = _safe_get_text(row, CURRENT_SCORE_SELECTOR)
+            total_score = _safe_get_text(row, TOTAL_SCORE_SELECTOR)
+            is_pass = _safe_get_text(row, IS_PASS_SELECTOR)
+            teacher_words = _safe_get_text(row, TEACHER_WORDS_SELECTOR)
+            status_text = _safe_get_text(row, STATUS_SELECTOR)
+            status_enum = _get_status_enum(status_text)
+
+            record = HomeworkRecord(
+                title=title,
+                start_time=start_time,
+                end_time=end_time,
+                teacher=teacher_name,
+                pass_score=pass_score,
+                current_score=current_score,
+                total_score=total_score,
+                is_pass=is_pass,
+                teacher_comment=teacher_words,
+                status=status_enum,
+            )
+
+            homework_records.append(record)
+            print(
+                f"<info> extracted {i + 1}: Title='{title}', Status='{status_enum} ({status_text})', Score='{current_score}/{total_score}'"
+            )
+
+        return homework_records
+
+    except Exception as e:
+        print(
+            f"<error> critical error during homework table parsing: {e}; returning empty list"
+        )
+        return []
+
+
+def download_audio(driver, index: int, record: HomeworkRecord):
+    print(f"--- step: download audio of index {index} ---")
+
+    try:
+        row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
+
+        if (
+            record.status == HomeworkStatus.NOT_COMPLETED
+            or record.status == HomeworkStatus.IN_PROGRESS
+            or record.status == HomeworkStatus.MAKE_UP
+        ):
+            button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
+        elif record.status == HomeworkStatus.COMPLETED:
+            button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
+        else:
+            print(f"<error> unsupported homework status: {record.status}")
+            return None
+
+        button_element = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
+        )
+
+        button_element.click()
+        print("<info> clicked 'go complete hw' button")
+
+        if (
+            record.status == HomeworkStatus.NOT_COMPLETED
+            or record.status == HomeworkStatus.IN_PROGRESS
+            or record.status == HomeworkStatus.MAKE_UP
+        ):
+            audio_selector = "#taskContent > p:nth-child(1) > audio:nth-child(1)"
+        elif record.status == HomeworkStatus.COMPLETED:
+            audio_selector = "#content1 > p:nth-child(1) > audio:nth-child(1)"
+        else:
+            print(f"<error> unsupported homework status: {record.status}")
+            return
+
+        audio_element = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, audio_selector))
+        )
+        audio_url = audio_element.get_attribute("src")
+
+        if not audio_url:
+            print("<error> audio source url not found on the task page")
+            driver.back()
+            wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR)
+                )
+            )
+            return
+
+        filename = f"{f"homework_{index}"}_audio.mp3"
+        try:
+            print(f"<info> downloading audio from: {audio_url}")
+            urllib.request.urlretrieve(audio_url, filename)
+            print(f"<info> download successful! file saved as '{filename}'")
+        except Exception as download_e:
+            print(
+                f"<error> failed to download audio using urllib.request: {download_e}"
+            )
+
+        driver.get(url_homework_list)
+        wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
+        )
+        print("<info> navigated back to homework list page")
+
+    except Exception as e:
+        print(f"<error> critical error during audio download: {e}")
+
+
+def transcribe_audio(index: int):
+    print(f"--- step: transcribe audio of index {index} ---")
+
+    audio_file = f"homework_{index}_audio.mp3"
+
+    global whisper_model
+    if whisper_model is None:
+        print("<info> loading Whisper model (this may take a while)...")
+        whisper_model = whisper.load_model("large")
+    else:
+        print("<info> Whisper model already loaded")
+
+    print(f"<info> transcribing audio file: {audio_file} (this may take a while)...")
+    result = whisper_model.transcribe(audio_file, language="en")
+    transcription = result.get("text", None)
+    if transcription is None or (transcription is str and transcription.strip() == ""):
+        print(f"<error> transcription failed or returned empty result")
+        return
+
+    transcription_file = f"{audio_file}.txt"
+    with open(transcription_file, "w", encoding="utf-8") as f:
+        if type(transcription) is str:
+            f.write(transcription)
+            print(f"<info> transcription successful! saving to '{transcription_file}'")
+        if type(transcription) is list:
+            f.write("\n".join(transcription))
+            print(f"<info> transcription successful! saved to '{transcription_file}'")
+
+
+def get_text(driver, index: int, record: HomeworkRecord) -> str | None:
+    print(f"--- step: retreive text content of index {index}")
+
+    PAPER_SELECTOR = ".el-dialog__body"
+
+    try:
+        row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
+
+        if (
+            record.status == HomeworkStatus.NOT_COMPLETED
+            or record.status == HomeworkStatus.IN_PROGRESS
+            or record.status == HomeworkStatus.MAKE_UP
+        ):
+            button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
+        elif record.status == HomeworkStatus.COMPLETED:
+            button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
+        else:
+            print(f"<error> unsupported homework status: {record.status}")
+            return None
+
+        button_element = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
+        )
+
+        button_element.click()
+        print("<info> clicked 'go complete hw' button")
+
+        print(f"<info> scraping text content using selector: {PAPER_SELECTOR}")
+        paper_element = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, PAPER_SELECTOR))
+        )
+        homework_text = paper_element.text
+
+        driver.get(url_homework_list)
+        wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
+        )
+        print("<info> navigated back to homework list")
+
+        return homework_text
+    except Exception as e:
+        print(f"<error> critical error during text scraping: {e}; returning None")
+        return None
+
+
+def main():
+    print("--- english homework helper ---")
+    print("--- by: ujhhgtg ---")
+    print("--- github:  ---")
+
+    print("--- step: initialize ---")
+    atexit.register(_close_browser_on_exit)
+    print("<info> registered atexit handler to close browser on exit")
+    Path("./cache/").mkdir(parents=True, exist_ok=True)
+    print("<info> created cache directory")
+
+    driver.get(url)
+    print(f"<info> navigated to: {url}")
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)))
+
+    login(driver)
+    time.sleep(2)
+
+    driver.get(url_homework_list)
+    print(f"<info> navigated to: {url_homework_list}")
+    wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
+    )
+
+    hw_list = parse_homework_list(driver)
+
+    print("--- entering interactive mode ---")
+
+    with patch_stdout():
+        while True:
+            user_input = (
+                session.prompt(
+                    "ehh> ",
+                    completer=WordCompleter(
+                        [
+                            "download_audio",
+                            "transcribe_audio",
+                            "get_text",
+                            "help",
+                            "list",
+                            "exit",
+                            "quit",
+                            "stop",
+                            "bye",
+                        ],
+                        ignore_case=True,
+                    ),
+                )
+                .strip()
+                .lower()
+            )
+            try:
+                match user_input:
+                    case "help":
+                        print("available commands:")
+                        print("  download_audio - download audio of a homework item")
+                        print(
+                            "  transcribe_audio - transcribe downloaded audio using Whisper"
+                        )
+                        print("  get_text - get text content of a homework item")
+                        print("  help - show this help message")
+                        print("  list - list all homework items")
+                        print("  exit, quit, stop, bye - exit the program")
+
+                    case "list":
+                        hw_list = parse_homework_list(driver)
+
+                    case "download_audio":
+                        index = int(
+                            session.prompt("homework index to download audio: ").strip()
+                        )
+                        if index < 0 or index >= len(hw_list):
+                            print(f"<error> index out of range: {index}")
+                            break
+
+                        download_audio(driver, index, hw_list[index])
+
+                    case "transcribe_audio":
+                        index = int(
+                            session.prompt(
+                                "homework index to transcribe audio: "
+                            ).strip()
+                        )
+                        if index < 0 or index >= len(hw_list):
+                            print(f"<error> index out of range: {index}")
+                            break
+
+                        audio_file = f"homework_{index}_audio.mp3"
+
+                        if not Path(audio_file).is_file():
+                            print(
+                                f"<error> audio file for index {index} not found; please download it first"
+                            )
+                            break
+
+                        transcribe_audio(index)
+
+                    case "get_text":
+                        index = int(
+                            session.prompt("homework index to get text: ").strip()
+                        )
+                        if index < 0 or index >= len(hw_list):
+                            print(f"<error> index out of range: {index}")
+                            break
+
+                        get_text(driver, index, hw_list[index])
+
+                    case "exit" | "quit" | "stop" | "bye":
+                        print("<info> exiting program[default]...[/default]")
+                        exit(0)
+
+                    case "":
+                        ...
+
+                    case _:
+                        print(f"<info> unrecognized command: '{user_input}'")
+            except KeyboardInterrupt:
+                continue
+
+
+if __name__ == "__main__":
+    main()

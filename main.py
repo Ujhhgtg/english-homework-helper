@@ -11,22 +11,23 @@ from selenium.webdriver.common.action_chains import ActionChains  # Import Actio
 from selenium.webdriver.support.ui import WebDriverWait
 import time
 import atexit
-
-# from prompt_toolkit import print_formatted_text as print
 from rich import print
+from rich.progress import Progress
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import choice
 from prompt_toolkit.completion import WordCompleter
 import urllib.request
 import threading
-import whisper
+import faster_whisper
 from pathlib import Path
 
 from constants import *
 from models.homework_record import HomeworkRecord
 from models.homework_status import HomeworkStatus
+from models.ai_client import AIClient
 from local.credentials import CREDENTIALS_LIST
+from local.ai_clients import AI_CLIENT_LIST
 
 
 url = "https://admin.jeedu.net/login"
@@ -35,7 +36,7 @@ driver_options = FirefoxOptions()
 driver_options.binary_location = "/usr/bin/firefox"
 driver = webdriver.Firefox(options=driver_options)
 wait = WebDriverWait(driver, 15)
-whisper_model: whisper.model.Whisper | None = None
+whisper_model: faster_whisper.WhisperModel | None = None
 session = PromptSession()
 
 
@@ -73,7 +74,6 @@ def _get_status_enum(status_text: str | None) -> HomeworkStatus | None:
 
 
 def login(driver):
-
     print("--- step: login ---")
 
     credentials_choice = choice(
@@ -264,25 +264,25 @@ def transcribe_audio(index: int):
     global whisper_model
     if whisper_model is None:
         print("<info> loading Whisper model (this may take a while)...")
-        whisper_model = whisper.load_model("large")
+        whisper_model = faster_whisper.WhisperModel("large")
     else:
         print("<info> Whisper model already loaded")
 
     print(f"<info> transcribing audio file: {audio_file} (this may take a while)...")
-    result = whisper_model.transcribe(audio_file, language="en")
-    transcription = result.get("text", None)
-    if transcription is None or (transcription is str and transcription.strip() == ""):
-        print(f"<error> transcription failed or returned empty result")
-        return
-
+    segments, info = whisper_model.transcribe(audio_file, language="en", beam_size=5)
+    total_duration = round(info.duration, 2)
     transcription_file = f"{audio_file}.txt"
+
     with open(transcription_file, "w", encoding="utf-8") as f:
-        if type(transcription) is str:
-            f.write(transcription)
-            print(f"<info> transcription successful! saving to '{transcription_file}'")
-        if type(transcription) is list:
-            f.write("\n".join(transcription))
-            print(f"<info> transcription successful! saved to '{transcription_file}'")
+        with Progress() as progress:
+            task_id = progress.add_task(
+                "[bold_cyan]Transcribing...", total=total_duration
+            )
+            for segment in segments:
+                progress.update(task_id, completed=round(segment.end, 2))
+                f.write(segment.text)
+
+    print(f"<info> transcription successful! saved to '{transcription_file}'")
 
 
 def get_text(driver, index: int, record: HomeworkRecord) -> str | None:
@@ -354,7 +354,8 @@ def main():
         EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
     )
 
-    hw_list = parse_homework_list(driver)
+    hw_list: list[HomeworkRecord] = []
+    ai_client: AIClient | None = None
 
     print("--- entering interactive mode ---")
 
@@ -370,10 +371,8 @@ def main():
                         "get_text",
                         "help",
                         "list",
+                        "set_ai_client",
                         "exit",
-                        "quit",
-                        "stop",
-                        "bye",
                     ],
                     ignore_case=True,
                 ),
@@ -392,7 +391,8 @@ def main():
                     print("  get_text - get text content of a homework item")
                     print("  help - show this help message")
                     print("  list - list all homework items")
-                    print("  exit, quit, stop, bye - exit the program")
+                    print("  set_ai_client - set AI client for AI-based features")
+                    print("  exit - exit the program")
 
                 case "list":
                     hw_list = parse_homework_list(driver)
@@ -411,11 +411,11 @@ def main():
                     index = int(
                         session.prompt("homework index to transcribe audio: ").strip()
                     )
-                    if index < 0 or index >= len(hw_list):
-                        print(f"<error> index out of range: {index}")
-                        break
+                    # if index < 0 or index >= len(hw_list):
+                    #     print(f"<error> index out of range: {index}")
+                    #     break
 
-                    audio_file = f"homework_{index}_audio.mp3"
+                    audio_file = f"cache/homework_{index}_audio.mp3"
 
                     if not Path(audio_file).is_file():
                         print(
@@ -433,8 +433,39 @@ def main():
 
                     get_text(driver, index, hw_list[index])
 
-                case "exit" | "quit" | "stop" | "bye":
-                    print("<info> exiting program...")
+                case "set_ai_client":
+                    options = [("none", "disable AI features")]
+                    options.extend(
+                        map(
+                            lambda c: (
+                                f"{c.api_url}|{c.api_key}",
+                                f"{c.api_url} / {c.api_key}",
+                            ),
+                            AI_CLIENT_LIST,
+                        )
+                    )
+                    ai_choice = choice(
+                        "select AI client to use:",
+                        options=options,
+                    )
+                    if ai_choice == "none":
+                        ai_client = None
+                        print("<info> AI features disabled")
+                    else:
+                        ai_choice_keys = ai_choice.split("|")
+                        ai_client = next(
+                            (
+                                c
+                                for c in AI_CLIENT_LIST
+                                if c.api_url == ai_choice_keys[0]
+                                and c.api_key == ai_choice_keys[1]
+                            ),
+                            None,
+                        )
+                        print(f"<info> selected AI client: {ai_client.api_url} / {ai_client.api_key}")  # type: ignore
+
+                case "exit":
+                    print("<info> exiting...")
                     exit(0)
 
                 case "":

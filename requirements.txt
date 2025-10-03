@@ -1,5 +1,5 @@
 selenium
 prompt_toolkit
 rich
-openai-whisper
+faster-whisper
 openai

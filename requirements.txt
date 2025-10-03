@@ -1,0 +1,4 @@
+selenium
+prompt_toolkit
+rich
+openai-whisper

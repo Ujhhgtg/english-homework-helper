@@ -1,6 +1,7 @@
 # Local files
 cache/
 local/credentials.py
+local/ai_clients.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

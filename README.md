@@ -34,6 +34,13 @@ pip install -r requirements.txt
 
 Rename `local/credentials.py.example` to `local/credentials.py` and fill in your own credentials.
 
+### 3. Configure OpenAI API (Optional)
+
+> [!NOTE]
+> This step is optional. However, if you don't configure AI, you would not be able to use AI-based features.
+
+Rename `local/ai_clients.py.example` to `local/ai_clients.py` and fill in your api urls & keys.
+
 ## 💻 Usage
 
 Run the main script:

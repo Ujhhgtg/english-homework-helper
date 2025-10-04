@@ -43,4 +43,57 @@ VIEW_ORIGINAL_BUTTON_SELECTOR = (
 )
 NEXT_PAGE_BUTTON_SELECTOR = ".btn-next"
 
+PAPER_SELECTOR = ".el-dialog__body"
+
 DRAG_DISTANCE_PIXELS = 300
+
+COMPLETION_WORD_MAP = {
+    (): ["list", "audio", "text", "answers", "help", "account", "ai", "config", "exit"],
+    ("list",): [],
+    ("audio",): ["download", "transcribe"],
+    (
+        "audio",
+        "download",
+    ): [],
+    (
+        "audio",
+        "transcribe",
+    ): [],
+    ("text",): ["display", "download"],
+    (
+        "text",
+        "display",
+    ): [],
+    (
+        "text",
+        "download",
+    ): [],
+    ("answers",): ["download", "fill_in"],
+    ("answers", "download"): [],
+    ("answers", "fill_in"): [],
+    ("help",): [],
+    ("account",): ["login", "logout", "select_default"],
+    (
+        "account",
+        "login",
+    ): [],
+    (
+        "account",
+        "logout",
+    ): [],
+    (
+        "account",
+        "select_default",
+    ): [],
+    ("ai",): ["select_api"],
+    (
+        "ai",
+        "select_api",
+    ): [],
+    ("config",): ["reload"],
+    (
+        "config",
+        "reload",
+    ): [],
+    ("exit",): [],
+}

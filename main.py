@@ -6,7 +6,7 @@ from selenium.webdriver.firefox.options import (
     Options as FirefoxOptions,
 )
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains  # Import ActionChains
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.keys import Keys
 import time
@@ -15,7 +15,6 @@ from prompt_toolkit import PromptSession
 
 # from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import choice
-from prompt_toolkit.completion import WordCompleter
 import urllib.request
 import threading
 import whisper
@@ -39,18 +38,17 @@ from constants import *
 from models.homework_record import HomeworkRecord
 from models.homework_status import HomeworkStatus
 from models.ai_client import AIClient
-
 from utils.webdriver import FirefoxDriver
-from utils.exceptions import break_match_case, BreakMatchCase
 from utils.logging import print
 from utils.convert import parse_int, mask_string_middle
 from utils.crypto import encodeb64_safe
+from utils.prompt import LastWordCompleter
 
 
 driver: FirefoxDriver = None  # type: ignore
 wait: WebDriverWait = None  # type: ignore
 whisper_model: whisper.model.Whisper | None = None
-session = PromptSession()
+session: PromptSession = PromptSession()
 config: Munch = None  # type: ignore
 
 
@@ -215,7 +213,7 @@ def get_list(driver: FirefoxDriver) -> list[HomeworkRecord]:
 
                 homework_records.append(record)
                 print(
-                    f"<success> extracted {i + 1}: Title='{title}', Status='{status_enum} ({status_text})', Score='{current_score}/{total_score}'"
+                    f"<success> extracted {i}: Title='{title}', Status='{status_enum} ({status_text})', Score='{current_score}/{total_score}'"
                 )
 
             next_page_button = driver.find_element(
@@ -372,8 +370,6 @@ def transcribe_audio(index: int, record: HomeworkRecord):
 
 def get_text(driver: FirefoxDriver, index: int, record: HomeworkRecord) -> str | None:
     print(f"--- step: retreive text content of index {index} ---")
-
-    PAPER_SELECTOR = ".el-dialog__body"
 
     row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
 
@@ -639,37 +635,39 @@ def main():
                 f"<warning> default AI client index {default_index} out of range; falling back to no AI client"
             )
 
+    hw_list: list[HomeworkRecord] = []
+
     credentials = None
     if config.credentials.default is not None:
         default_index = config.credentials.default
         if 0 <= default_index < len(config.credentials.all):
             credentials = config.credentials.all[default_index]
+            login(driver, credentials)
+            goto_hw_list_page(driver)
+            hw_list = get_list(driver)
             print(f"<info> using default credentials at index {default_index}")
         else:
             print(
-                f"<warning> default credentials index {default_index} out of range; falling back to interactive selection"
+                f"<warning> default credentials index {default_index} out of range; not logging in"
             )
-    if credentials is None:
-        credentials_choice = choice(
-            "select credentials to use:",
-            options=list(
-                map(
-                    lambda c: (
-                        c.username,
-                        f"{c.school} / {c.username} / {mask_string_middle(c.password)}",
-                    ),
-                    config.credentials.all,
-                )
-            ),
-        )
-        credentials = next(
-            c for c in config.credentials.all if c.username == credentials_choice
-        )
-    login(driver, credentials)
-
-    goto_hw_list_page(driver)
-
-    hw_list: list[HomeworkRecord] = get_list(driver)
+    else:
+        print(f"<info> no default credentials provided; not logging in")
+    # if credentials is None:
+    #     credentials_choice = choice(
+    #         "select credentials to use:",
+    #         options=list(
+    #             map(
+    #                 lambda c: (
+    #                     c.username,
+    #                     f"{c.school} / {c.username} / {mask_string_middle(c.password)}",
+    #                 ),
+    #                 config.credentials.all,
+    #             )
+    #         ),
+    #     )
+    #     credentials = next(
+    #         c for c in config.credentials.all if c.username == credentials_choice
+    #     )
 
     # application.run_polling(allowed_updates=Update.ALL_TYPES)
 
@@ -680,23 +678,7 @@ def main():
         user_input = (
             session.prompt(
                 "ehh> ",
-                completer=WordCompleter(
-                    [
-                        "download_audio",
-                        "transcribe_audio",
-                        "get_text",
-                        "download_text",
-                        "fill_answers",
-                        "help",
-                        "list",
-                        "login",
-                        "select_ai_client",
-                        "select_default_credentials",
-                        "reload_config",
-                        "exit",
-                    ],
-                    ignore_case=True,
-                ),
+                completer=LastWordCompleter(COMPLETION_WORD_MAP),
             )
             .strip()
             .lower()
@@ -709,16 +691,13 @@ def main():
             match input_parts[0]:
                 case "help":
                     print("available commands:")
-                    print("  download_audio - download audio of a homework item")
-                    print(
-                        "  transcribe_audio - transcribe downloaded audio using Whisper"
-                    )
-                    print("  get_text - get text content of a homework item")
-                    print("  download_text - download text content of a homework item")
-                    print("  fill_answers - fill in answers for a homework item")
+                    print("  audio - download/transcribe audio of a homework item")
+                    print("  text - display/download text content of a homework item")
+                    print("  answer - fill in answers for a homework item")
                     print("  help - show this help message")
                     print("  list - list all homework items")
-                    print("  login - re-log in with another credentials")
+                    print("  login - (re-)log in with another credentials")
+                    print("  logout - log out")
                     print("  select_ai_client - select AI client for AI-based features")
                     print(
                         "  select_default_credentials - select default credentials used for logging in"
@@ -729,197 +708,206 @@ def main():
                 case "list":
                     hw_list = get_list(driver)
 
-                case "download_audio":
-                    if len(input_parts) <= 1:
+                case "audio":
+                    if len(input_parts) < 3:
                         print("<error> argument not enough")
-                        break_match_case()
-
-                    index = parse_int(input_parts[1])
+                        continue
+                    index = parse_int(input_parts[2])
                     if index is None:
                         print("<error> argument invalid")
-                        break_match_case()
+                        continue
 
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
-                        break_match_case()
+                        continue
 
-                    download_audio(driver, index, hw_list[index])
+                    match input_parts[1]:
+                        case "download":
+                            download_audio(driver, index, hw_list[index])
+                        case "transcribe":
+                            audio_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_audio.mp3"
+                            if not Path(audio_file).is_file():
+                                print(
+                                    f"<error> audio file for index {index} not found; please download it first"
+                                )
+                                continue
+                            transcribe_audio(index, hw_list[index])
+                        case _:
+                            print("<error> argument invalid")
 
-                case "transcribe_audio":
-                    if len(input_parts) <= 1:
+                case "text":
+                    if len(input_parts) < 2:
                         print("<error> argument not enough")
-                        break_match_case()
-
-                    index = parse_int(input_parts[1])
-                    if index == None:
-                        print("<error> argument invalid")
-                        break_match_case()
-
-                    # if index < 0 or index >= len(hw_list):
-                    #     print(f"<error> index out of range: {index}")
-                    #     break_match_case()
-
-                    audio_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_audio.mp3"
-
-                    if not Path(audio_file).is_file():
-                        print(
-                            f"<error> audio file for index {index} not found; please download it first"
-                        )
-                        break_match_case()
-
-                    transcribe_audio(index, hw_list[index])
-
-                case "get_text":
-                    if len(input_parts) <= 1:
-                        print("<error> argument not enough")
-                        break_match_case()
-
+                        continue
                     index = parse_int(input_parts[1])
                     if index is None:
                         print("<error> argument invalid")
-                        break_match_case()
-
+                        continue
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
-                        break_match_case()
+                        continue
 
-                    get_text(driver, index, hw_list[index])
+                    match input_parts[1]:
+                        case "display":
+                            print(get_text(driver, index, hw_list[index]))
+                        case "download":
+                            download_text(driver, index, hw_list[index])
+                        case _:
+                            print("<error> argument invalid")
 
-                case "download_text":
-                    if len(input_parts) <= 1:
+                case "answers":
+                    if len(input_parts) < 3:
                         print("<error> argument not enough")
-                        break_match_case()
-
+                        continue
                     index = parse_int(input_parts[1])
                     if index is None:
                         print("<error> argument invalid")
-                        break_match_case()
-
+                        continue
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
                         raise KeyboardInterrupt()
 
-                    download_text(driver, index, hw_list[index])
+                    match input_parts[1]:
+                        case "fill_in":
+                            answers_input = (
+                                session.prompt("answers (e.g. A B C D A): ")
+                                .strip()
+                                .upper()
+                            )
+                            answers = answers_input.split()
+                            if not answers or any(
+                                a not in ["A", "B", "C", "D"] for a in answers
+                            ):
+                                print(
+                                    f"<error> invalid answers format: '{answers_input}'"
+                                )
+                                raise KeyboardInterrupt()
+                            fill_answers(driver, index, hw_list[index], answers)
+                        case "download":
+                            raise NotImplementedError()
+                        case _:
+                            print("<error> argument invalid")
 
-                case "fill_answers":
-                    if len(input_parts) <= 1:
+                case "account":
+                    if len(input_parts) < 2:
                         print("<error> argument not enough")
-                        break_match_case()
+                        continue
 
-                    index = parse_int(input_parts[1])
-                    if index is None:
-                        print("<error> argument invalid")
-                        break_match_case()
+                    match input_parts[1]:
+                        case "login":
+                            options = list(
+                                map(
+                                    lambda c: (
+                                        c[0],
+                                        f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
+                                    ),
+                                    enumerate(config.credentials.all),
+                                )
+                            )  # type: ignore
+                            default = 0
+                            if isinstance(config.credentials.default, int):
+                                default = config.credentials.default
+                            cred_choice = choice(
+                                "select credentials to use:",
+                                options=options,
+                                default=default,
+                            )
+                            credentials = config.credentials.all[cred_choice]
+                            logout(driver)
+                            login(driver, credentials)
+                            goto_hw_list_page(driver)
+                            hw_list = get_list(driver)
+                            print(
+                                f"<success> logged in with credentials: {credentials.school} / {credentials.username} / {mask_string_middle(credentials.password)}"
+                            )
+                        case "logout":
+                            logout(driver)
+                        case "select_default":
+                            options = [("none", "disable auto login")]
+                            options.extend(
+                                map(
+                                    lambda c: (
+                                        c[0],
+                                        f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
+                                    ),
+                                    enumerate(config.credentials.all),
+                                )  # type: ignore
+                            )
+                            default = "none"
+                            if isinstance(config.credentials.default, int):
+                                default = config.credentials.default
+                            cred_choice = choice(
+                                "select default credentials to use:",
+                                options=options,
+                                default=default,
+                            )
+                            if cred_choice == "none":
+                                config.credentials.default = None
+                                print("<info> cleared default credentials")
+                                continue
 
-                    if index < 0 or index >= len(hw_list):
-                        print(f"<error> index out of range: {index}")
-                        raise KeyboardInterrupt()
+                            config.credentials.default = cred_choice
+                            cred = config.credentials.all[cred_choice]
+                            print(
+                                f"<info> selected default credentials: {cred.school} / {cred.username} / {mask_string_middle(cred.password)}"
+                            )
+                        case _:
+                            print("<error> argument invalid")
 
-                    answers_input = (
-                        session.prompt("answers (e.g. A B C D A): ").strip().upper()
-                    )
-                    answers = answers_input.split()
-                    if not answers or any(
-                        a not in ["A", "B", "C", "D"] for a in answers
-                    ):
-                        print(f"<error> invalid answers format: '{answers_input}'")
-                        raise KeyboardInterrupt()
+                case "ai":
+                    if len(input_parts) < 2:
+                        print("<error> argument not enough")
+                        continue
 
-                    fill_answers(driver, index, hw_list[index], answers)
+                    match input_parts[1]:
+                        case "select_api":
+                            options = [("none", "disable AI features")]
+                            options.extend(
+                                map(
+                                    lambda c: (
+                                        c[0],
+                                        f"{c[1].api_url} / {mask_string_middle(c[1].api_key)}",
+                                    ),
+                                    enumerate(config.ai_client.all),
+                                )  # type: ignore
+                            )
+                            default = "none"
+                            if isinstance(config.ai_client.default, int):
+                                default = config.ai_client.default
+                            cred_choice = choice(
+                                "select AI client to use:",
+                                options=options,
+                                default=default,
+                            )
+                            if cred_choice == "none":
+                                ai_client = None
+                                config.ai_client.default = None
+                                print("<info> AI features disabled")
+                                continue
 
-                case "login":
-                    options = list(
-                        map(
-                            lambda c: (
-                                c[0],
-                                f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
-                            ),
-                            enumerate(config.credentials.all),
-                        )
-                    )  # type: ignore
-                    default = 0
-                    if isinstance(config.credentials.default, int):
-                        default = config.credentials.default
-                    cred_choice = choice(
-                        "select credentials to use:",
-                        options=options,
-                        default=default,
-                    )
-                    credentials = config.credentials.all[cred_choice]
-                    logout(driver)
-                    login(driver, credentials)
-                    goto_hw_list_page(driver)
-                    hw_list = get_list(driver)
-                    print(
-                        f"<success> logged in with credentials: {credentials.school} / {credentials.username} / {mask_string_middle(credentials.password)}"
-                    )
+                            ai_client_conf = config.ai_client.all[cred_choice]
+                            ai_client = AIClient(
+                                ai_client_conf.api_url, ai_client_conf.api_key
+                            )
+                            config.ai_client.default = cred_choice
+                            print(
+                                f"<info> selected AI client: {ai_client.api_url} / {mask_string_middle(ai_client.api_key)}"
+                            )
+                        case _:
+                            print("<error> argument invalid")
 
-                case "select_default_credentials":
-                    options = [("none", "always ask")]
-                    options.extend(
-                        map(
-                            lambda c: (
-                                c[0],
-                                f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
-                            ),
-                            enumerate(config.credentials.all),
-                        )  # type: ignore
-                    )
-                    default = "none"
-                    if isinstance(config.credentials.default, int):
-                        default = config.credentials.default
-                    cred_choice = choice(
-                        "select default credentials to use:",
-                        options=options,
-                        default=default,
-                    )
-                    if cred_choice == "none":
-                        config.credentials.default = None
-                        print("<info> cleared default credentials")
-                        break_match_case()
+                case "config":
+                    if len(input_parts) < 2:
+                        print("<error> argument not enough")
+                        continue
 
-                    config.credentials.default = cred_choice
-                    cred = config.credentials.all[cred_choice]
-                    print(
-                        f"<info> selected default credentials: {cred.school} / {cred.username} / {mask_string_middle(cred.password)}"
-                    )
-
-                case "select_ai_client":
-                    options = [("none", "disable AI features")]
-                    options.extend(
-                        map(
-                            lambda c: (
-                                c[0],
-                                f"{c[1].api_url} / {mask_string_middle(c[1].api_key)}",
-                            ),
-                            enumerate(config.ai_client.all),
-                        )  # type: ignore
-                    )
-                    default = "none"
-                    if isinstance(config.ai_client.default, int):
-                        default = config.ai_client.default
-                    cred_choice = choice(
-                        "select AI client to use:",
-                        options=options,
-                        default=default,
-                    )
-                    if cred_choice == "none":
-                        ai_client = None
-                        config.ai_client.default = None
-                        print("<info> AI features disabled")
-                        break_match_case()
-
-                    ai_client_conf = config.ai_client.all[cred_choice]
-                    ai_client = AIClient(ai_client_conf.api_url, ai_client_conf.api_key)
-                    config.ai_client.default = cred_choice
-                    print(
-                        f"<info> selected AI client: {ai_client.api_url} / {mask_string_middle(ai_client.api_key)}"
-                    )
-
-                case "reload_config":
-                    config = _load_config()
-                    print("<info> reloaded config file")
-                    print("<info> note: current AI client selection is not changed")
+                    match input_parts[1]:
+                        case "reload":
+                            config = _load_config()
+                            print("<info> reloaded config file")
+                            print("<info> note: current states are not changed")
+                        case _:
+                            print("<error> argument invalid")
 
                 case "exit":
                     print("<info> exiting...")
@@ -929,10 +917,11 @@ def main():
 
                 case _:
                     print(f"<error> unrecognized command: '{user_input}'")
-        except BreakMatchCase:
-            continue
+        except NotImplementedError:
+            print("<error> feature not yet implemented")
 
         except KeyboardInterrupt:
+            print("<warning> interrupted")
             continue
 
 

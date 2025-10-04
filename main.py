@@ -12,7 +12,9 @@ from selenium.webdriver.common.action_chains import ActionChains  # Import Actio
 from selenium.webdriver.support.ui import WebDriverWait
 import time
 import atexit
-from rich import print
+from rich.console import Console
+from rich.highlighter import ReprHighlighter
+from rich.theme import Theme
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import choice
@@ -47,6 +49,31 @@ driver = webdriver.Firefox(options=driver_options)
 wait = WebDriverWait(driver, 15)
 whisper_model: whisper.model.Whisper | None = None
 session = PromptSession()
+
+
+_console: Console | None = None
+
+
+def print(*args, **kwargs):
+    global _console
+    if not _console:
+        highlighter = ReprHighlighter()
+        highlighter.highlights.extend(
+            [
+                r"(?i)(?P<info>info)",
+                r"(?i)(?P<warning>warning)",
+                r"(?i)(?P<error>error)",
+            ]
+        )
+        theme = Theme(
+            {
+                "repr.info": "bold green",
+                "repr.warning": "bold yellow",
+                "repr.error": "bold red",
+            }
+        )
+        _console = Console(highlighter=highlighter, theme=theme)
+    _console.print(*args, **kwargs)
 
 
 def _close_browser_on_exit():
@@ -728,7 +755,7 @@ def main():
                     ...
 
                 case _:
-                    print(f"<info> unrecognized command: '{user_input}'")
+                    print(f"<error> unrecognized command: '{user_input}'")
         except KeyboardInterrupt:
             continue
 

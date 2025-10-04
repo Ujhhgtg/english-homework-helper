@@ -20,17 +20,30 @@ A powerful command-line tool designed to automate login, homework list parsing, 
 
 You need to have Python 3.9+ and Firefox installed on your system.
 
-### 1. Project Setup
+### 1. Clone repo & Install deps
 
 Clone the repository and install the required Python packages:
 
 ```bash
 git clone https://github.com/Ujhhgtg/english-homework-helper.git
 cd english-homework-helper
+
+# Install PyTorch for GPU-accelerated Whisper audio transcription
+# Choose one of the following based on your device
+# Skip this step to fallback to CPU
+# CUDA 12.6
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# CUDA 12.8
+pip3 install torch torchvision
+# CUDA 12.9
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu129
+# ROCm 6.4
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.4
+
 pip install -r requirements.txt
 ```
 
-### 2. Configure Credentials
+### 2. Configure credentials
 
 Rename `local/credentials.py.example` to `local/credentials.py` and fill in your own credentials.
 

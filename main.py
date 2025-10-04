@@ -55,7 +55,7 @@ def _close_browser_on_exit():
         try:
             driver.current_url
             driver.quit()
-            print("<info> atexit: firefox browser closed automatically")
+            print("<info> atexit: browser closed automatically")
         except Exception:
             pass
 
@@ -131,7 +131,7 @@ def login(driver):
     login_button.click()
 
 
-def parse_homework_list(driver) -> list[HomeworkRecord]:
+def get_homework_list(driver) -> list[HomeworkRecord]:
     """Finds and extracts data from all homework rows on the current page (table structure)."""
 
     print("--- step: parse homework list ---")
@@ -230,9 +230,16 @@ def download_audio(driver, index: int, record: HomeworkRecord):
             print(f"<error> unsupported homework status: {record.status}")
             return
 
-        audio_element = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, audio_selector))
-        )
+        audio_element = driver.find_element(By.CSS_SELECTOR, audio_selector)
+        if not audio_element:
+            print(f"<error> audio element not found using selector: {audio_selector}")
+            driver.get(URL_HOMEWORK_LIST)
+            wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR)
+                )
+            )
+            return
         audio_url = audio_element.get_attribute("src")
 
         if not audio_url:
@@ -324,44 +331,117 @@ def get_text(driver, index: int, record: HomeworkRecord) -> str | None:
 
     PAPER_SELECTOR = ".el-dialog__body"
 
-    try:
-        row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
+    row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
 
-        if (
-            record.status == HomeworkStatus.NOT_COMPLETED
-            or record.status == HomeworkStatus.IN_PROGRESS
-            or record.status == HomeworkStatus.MAKE_UP
-        ):
-            button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
-        elif record.status == HomeworkStatus.COMPLETED:
-            button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
-        else:
-            print(f"<error> unsupported homework status: {record.status}")
-            return None
-
-        button_element = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
-        )
-
-        button_element.click()
-        print("<info> clicked 'go complete hw' button")
-
-        print(f"<info> scraping text content using selector: {PAPER_SELECTOR}")
-        paper_element = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, PAPER_SELECTOR))
-        )
-        homework_text = paper_element.text
-
-        driver.get(URL_HOMEWORK_LIST)
-        wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
-        )
-        print("<info> navigated back to homework list")
-
-        return homework_text
-    except Exception as e:
-        print(f"<error> critical error during text scraping: {e}; returning None")
+    if (
+        record.status == HomeworkStatus.NOT_COMPLETED
+        or record.status == HomeworkStatus.IN_PROGRESS
+        or record.status == HomeworkStatus.MAKE_UP
+    ):
+        button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
+    elif record.status == HomeworkStatus.COMPLETED:
+        button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
+    else:
+        print(f"<error> unsupported homework status: {record.status}")
         return None
+
+    button_element = wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
+    )
+
+    button_element.click()
+    print("<info> clicked 'go complete hw' button")
+
+    print(f"<info> scraping text content using selector: {PAPER_SELECTOR}")
+    paper_element = wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, PAPER_SELECTOR))
+    )
+    homework_text = paper_element.text
+
+    driver.get(URL_HOMEWORK_LIST)
+    wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
+    )
+    print("<info> navigated back to homework list")
+
+    return homework_text
+
+
+def download_text(driver, index: int, record: HomeworkRecord):
+    print(f"--- step: download text content of index {index} ---")
+
+    homework_text = get_text(driver, index, record)
+    if homework_text is None:
+        print(f"<error> failed to retrieve text content for index {index}")
+        return
+
+    text_file = f"cache/homework_{index}_text.txt"
+    with open(text_file, "w", encoding="utf-8") as f:
+        f.write(homework_text)
+    print(f"<info> text content saved to '{text_file}'")
+
+
+def fill_answers(driver, index: int, record: HomeworkRecord, answers: list[str]):
+    print(f"--- step: fill in answers for index {index} ---")
+
+    row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
+    if (
+        record.status == HomeworkStatus.NOT_COMPLETED
+        or record.status == HomeworkStatus.IN_PROGRESS
+        or record.status == HomeworkStatus.MAKE_UP
+    ):
+        button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
+    elif record.status == HomeworkStatus.COMPLETED:
+        button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
+    else:
+        print(f"<error> unsupported homework status: {record.status}")
+        return None
+
+    button_element = wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
+    )
+    button_element.click()
+    print("<info> clicked 'go complete hw' button")
+
+    quiz_container_id = "content1"
+
+    question_inputs = driver.find_elements(
+        By.XPATH,
+        f"//div[@id='{quiz_container_id}']//input[@type='radio' and contains(@class, 'pjAnswer')]",
+    )
+
+    question_names = [
+        input_element.get_attribute("name") for input_element in question_inputs
+    ]
+
+    print(f"<info> found {len(question_names)} questions")
+
+    if len(answers) < len(question_names):
+        print(
+            f"<warning> only {len(answers)} answers provided for {len(question_names)} questions"
+        )
+        question_names = question_names[: len(answers)]
+
+    for q_num, (name, answer_letter) in enumerate(zip(question_names, answers), 1):
+        print(q_num, name, answer_letter)
+
+        xpath = (
+            f"//div[@id='{quiz_container_id}']"
+            f"//input[@type='radio' and @name='{name}' and @value='{answer_letter}']"
+        )
+
+        try:
+            time.sleep(0.5)
+            radio_button = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+            radio_button.click()
+            print(f"<info> ✅ question {q_num}: selected option {answer_letter}")
+
+        except Exception as e:
+            print(
+                f"<error> ❌ could not select answer {answer_letter} for question {q_num}: {e}"
+            )
+
+    print("<info> all answers filled in; please review and submit manually")
 
 
 # hw_list: list[HomeworkRecord] = []
@@ -494,7 +574,7 @@ def main():
         EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
     )
 
-    hw_list: list[HomeworkRecord] = []
+    hw_list: list[HomeworkRecord] = get_homework_list(driver)
     ai_client: AIClient | None = None
 
     # application.run_polling(allowed_updates=Update.ALL_TYPES)
@@ -511,9 +591,11 @@ def main():
                         "download_audio",
                         "transcribe_audio",
                         "get_text",
+                        "download_text",
+                        "fill_answers",
                         "help",
                         "list",
-                        "set_ai_client",
+                        "select_ai_client",
                         "exit",
                     ],
                     ignore_case=True,
@@ -531,13 +613,15 @@ def main():
                         "  transcribe_audio - transcribe downloaded audio using Whisper"
                     )
                     print("  get_text - get text content of a homework item")
+                    print("  download_text - download text content of a homework item")
+                    print("  fill_answers - fill in answers for a homework item")
                     print("  help - show this help message")
                     print("  list - list all homework items")
-                    print("  set_ai_client - set AI client for AI-based features")
+                    print("  select_ai_client - select AI client for AI-based features")
                     print("  exit - exit the program")
 
                 case "list":
-                    hw_list = parse_homework_list(driver)
+                    hw_list = get_homework_list(driver)
 
                 case "download_audio":
                     index = int(
@@ -545,7 +629,7 @@ def main():
                     )
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
-                        break
+                        raise KeyboardInterrupt()
 
                     download_audio(driver, index, hw_list[index])
 
@@ -555,7 +639,7 @@ def main():
                     )
                     # if index < 0 or index >= len(hw_list):
                     #     print(f"<error> index out of range: {index}")
-                    #     break
+                    #     raise KeyboardInterrupt()
 
                     audio_file = f"cache/homework_{index}_audio.mp3"
 
@@ -563,7 +647,7 @@ def main():
                         print(
                             f"<error> audio file for index {index} not found; please download it first"
                         )
-                        break
+                        raise KeyboardInterrupt()
 
                     transcribe_audio(index)
 
@@ -571,11 +655,41 @@ def main():
                     index = int(session.prompt("homework index to get text: ").strip())
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
-                        break
+                        raise KeyboardInterrupt()
 
                     get_text(driver, index, hw_list[index])
 
-                case "set_ai_client":
+                case "download_text":
+                    index = int(
+                        session.prompt("homework index to download text: ").strip()
+                    )
+                    if index < 0 or index >= len(hw_list):
+                        print(f"<error> index out of range: {index}")
+                        raise KeyboardInterrupt()
+
+                    download_text(driver, index, hw_list[index])
+
+                case "fill_answers":
+                    index = int(
+                        session.prompt("homework index to fill in answers: ").strip()
+                    )
+                    if index < 0 or index >= len(hw_list):
+                        print(f"<error> index out of range: {index}")
+                        raise KeyboardInterrupt()
+
+                    answers_input = (
+                        session.prompt("answers (e.g. A B C D A): ").strip().upper()
+                    )
+                    answers = answers_input.split()
+                    if not answers or any(
+                        a not in ["A", "B", "C", "D"] for a in answers
+                    ):
+                        print(f"<error> invalid answers format: '{answers_input}'")
+                        raise KeyboardInterrupt()
+
+                    fill_answers(driver, index, hw_list[index], answers)
+
+                case "select_ai_client":
                     options = [("none", "disable AI features")]
                     options.extend(
                         map(
@@ -608,7 +722,7 @@ def main():
 
                 case "exit":
                     print("<info> exiting...")
-                    exit(0)
+                    break
 
                 case "":
                     ...

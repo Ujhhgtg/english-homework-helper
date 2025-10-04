@@ -1,6 +1,7 @@
 # Local files
 cache/
 local/config.json
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

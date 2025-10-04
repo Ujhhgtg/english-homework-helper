@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from turtle import st
+from regex import F
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import (
@@ -11,15 +13,13 @@ from selenium.webdriver.common.action_chains import ActionChains  # Import Actio
 from selenium.webdriver.support.ui import WebDriverWait
 import time
 import atexit
-from rich.console import Console
-from rich.highlighter import ReprHighlighter
-from rich.theme import Theme
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import choice
 from prompt_toolkit.completion import WordCompleter
 import urllib.request
 import threading
+from sympy import N
 import whisper
 from pathlib import Path
 import telegram
@@ -33,6 +33,7 @@ from telegram.ext import (
     ConversationHandler,
 )
 import json
+import shlex
 from munch import Munch, munchify
 
 from constants import *
@@ -45,6 +46,9 @@ from models.ai_client import AIClient
 
 # from local.telegram_bot_token import TELEGRAM_BOT_TOKEN
 from utils.webdriver import FirefoxDriver
+from utils.exceptions import break_match_case, BreakMatchCase
+from utils.logging import print
+from utils.convert import parse_int
 
 
 driver_options = FirefoxOptions()
@@ -53,45 +57,18 @@ driver = FirefoxDriver(options=driver_options)
 wait = WebDriverWait(driver, 15)
 whisper_model: whisper.model.Whisper | None = None
 session = PromptSession()
-rich_console: Console | None = None
 config: Munch = None  # type: ignore
 
 
-def print(*args, **kwargs):
-    global rich_console
-    if not rich_console:
-        highlighter = ReprHighlighter()
-        highlighter.highlights.extend(
-            [
-                r"(?i)(?P<debug>debug)",
-                r"(?i)(?P<success>success)",
-                r"(?i)(?P<info>info)",
-                r"(?i)(?P<warning>warning)",
-                r"(?i)(?P<error>error)",
-            ]
-        )
-        theme = Theme(
-            {
-                "repr.debug": "dim",
-                "repr.success": "bold green",
-                "repr.info": "bold blue",
-                "repr.warning": "bold yellow",
-                "repr.error": "bold red",
-            }
-        )
-        rich_console = Console(highlighter=highlighter, theme=theme)
-    rich_console.print(*args, **kwargs)
-
-
-def _close_browser_on_exit():
+def _at_exit():
     global driver
     if driver:
         try:
             driver.current_url
             driver.quit()
             print("<info> atexit: browser closed automatically")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"<error> error occured at exit: {e}")
 
 
 def _safe_get_text(element, selector: str):
@@ -311,7 +288,7 @@ def download_audio(driver: FirefoxDriver, index: int, record: HomeworkRecord):
         try:
             print(f"<info> downloading audio from: {audio_url}")
             urllib.request.urlretrieve(audio_url, filename)
-            print(f"<success> download successful! file saved as '{filename}'")
+            print(f"<success> file saved as '{filename}'")
         except Exception as download_e:
             print(
                 f"<error> failed to download audio using urllib.request: {download_e}"
@@ -353,7 +330,7 @@ def transcribe_audio(index: int):
     #             progress.update(task_id, completed=round(segment.end, 2))
     #             f.write(segment.text)
 
-    # print(f"<success> transcription successful! saved to '{transcription_file}'")
+    # print(f"<success> transcription saved to '{transcription_file}'")
 
     if whisper_model is None:
         print("<info> loading Whisper model (this may take a while)...")
@@ -385,18 +362,14 @@ def transcribe_audio(index: int):
     with open(transcription_file, "w", encoding="utf-8") as f:
         if isinstance(transcription, str):
             f.write(transcription)
-            print(
-                f"<success> transcription successful! saving to '{transcription_file}'"
-            )
+            print(f"<success> transcription saved to '{transcription_file}'")
         if isinstance(transcription, list):
             f.write("\n".join(transcription))
-            print(
-                f"<success> transcription successful! saved to '{transcription_file}'"
-            )
+            print(f"<success> transcription saved to '{transcription_file}'")
 
 
 def get_text(driver: FirefoxDriver, index: int, record: HomeworkRecord) -> str | None:
-    print(f"--- step: retreive text content of index {index}")
+    print(f"--- step: retreive text content of index {index} ---")
 
     PAPER_SELECTOR = ".el-dialog__body"
 
@@ -446,9 +419,10 @@ def download_text(driver: FirefoxDriver, index: int, record: HomeworkRecord):
     print(f"<info> text content saved to '{text_file}'")
 
 
+# TODO: fill-in-the-blanks questions
 def fill_answers(
     driver: FirefoxDriver, index: int, record: HomeworkRecord, answers: list[str]
-):
+) -> None:
     print(f"--- step: fill in answers for index {index} ---")
 
     row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
@@ -462,7 +436,7 @@ def fill_answers(
         button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
     else:
         print(f"<error> unsupported homework status: {record.status}")
-        return None
+        return
 
     button_element = wait.until(
         EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
@@ -611,6 +585,16 @@ def fill_answers(
 #     )
 
 
+def _load_config(path: str = "local/config.json") -> Munch:
+    with open(path, "rt", encoding="utf-8") as f:
+        return munchify(json.load(f))  # type: ignore
+
+
+def _save_config(config: Munch, path: str = "local/config.json") -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(config, indent=4, ensure_ascii=False))
+
+
 def main():
     global config
 
@@ -625,18 +609,18 @@ def main():
     # application.add_handler(CommandHandler("download_audio", command_download_audio))
 
     print("--- step: initialize ---")
-    atexit.register(_close_browser_on_exit)
-    print("<info> registered atexit handler to close browser on exit")
+    atexit.register(_at_exit)
+    print("<info> registered atexit handler")
     Path("./cache/").mkdir(parents=True, exist_ok=True)
     print("<info> created cache directory")
-    config = munchify(json.load(open("local/config.json", "r", encoding="utf-8")))  # type: ignore
+    config = _load_config()
     print("<info> loaded config file")
 
     ai_client: AIClient | None = None
-    if config.ai_clients.default is not None:
-        default_index = config.ai_clients.default
-        if 0 <= default_index < len(config.ai_clients.all):
-            ai_client_conf = config.ai_clients.all[default_index]
+    if config.ai_client.default is not None:
+        default_index = config.ai_client.default
+        if 0 <= default_index < len(config.ai_client.all):
+            ai_client_conf = config.ai_client.all[default_index]
             ai_client = AIClient(ai_client_conf.api_url, ai_client_conf.api_key)  # type: ignore
             print(f"<info> using default AI client at index {default_index}")
         else:
@@ -670,6 +654,7 @@ def main():
                         "help",
                         "list",
                         "select_ai_client",
+                        "reload_config",
                         "exit",
                     ],
                     ignore_case=True,
@@ -678,8 +663,12 @@ def main():
             .strip()
             .lower()
         )
+        input_parts = shlex.split(user_input)
+        if len(input_parts) <= 0:
+            continue
+
         try:
-            match user_input:
+            match input_parts[0]:
                 case "help":
                     print("available commands:")
                     print("  download_audio - download audio of a homework item")
@@ -692,28 +681,41 @@ def main():
                     print("  help - show this help message")
                     print("  list - list all homework items")
                     print("  select_ai_client - select AI client for AI-based features")
+                    print("  reload_config - reload configuration from file")
                     print("  exit - exit the program")
 
                 case "list":
                     hw_list = get_homework_list(driver)
 
                 case "download_audio":
-                    index = int(
-                        session.prompt("homework index to download audio: ").strip()
-                    )
+                    if len(input_parts) <= 1:
+                        print("<error> argument not enough")
+                        break_match_case()
+
+                    index = parse_int(input_parts[1])
+                    if index is None:
+                        print("<error> argument invalid")
+                        break_match_case()
+
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
-                        raise KeyboardInterrupt()
+                        break_match_case()
 
                     download_audio(driver, index, hw_list[index])
 
                 case "transcribe_audio":
-                    index = int(
-                        session.prompt("homework index to transcribe audio: ").strip()
-                    )
+                    if len(input_parts) <= 1:
+                        print("<error> argument not enough")
+                        break_match_case()
+
+                    index = parse_int(input_parts[1])
+                    if index == None:
+                        print("<error> argument invalid")
+                        break_match_case()
+
                     # if index < 0 or index >= len(hw_list):
                     #     print(f"<error> index out of range: {index}")
-                    #     raise KeyboardInterrupt()
+                    #     break_match_case()
 
                     audio_file = f"cache/homework_{index}_audio.mp3"
 
@@ -721,22 +723,36 @@ def main():
                         print(
                             f"<error> audio file for index {index} not found; please download it first"
                         )
-                        raise KeyboardInterrupt()
+                        break_match_case()
 
                     transcribe_audio(index)
 
                 case "get_text":
-                    index = int(session.prompt("homework index to get text: ").strip())
+                    if len(input_parts) <= 1:
+                        print("<error> argument not enough")
+                        break_match_case()
+
+                    index = parse_int(input_parts[1])
+                    if index is None:
+                        print("<error> argument invalid")
+                        break_match_case()
+
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
-                        raise KeyboardInterrupt()
+                        break_match_case()
 
                     get_text(driver, index, hw_list[index])
 
                 case "download_text":
-                    index = int(
-                        session.prompt("homework index to download text: ").strip()
-                    )
+                    if len(input_parts) <= 1:
+                        print("<error> argument not enough")
+                        break_match_case()
+
+                    index = parse_int(input_parts[1])
+                    if index is None:
+                        print("<error> argument invalid")
+                        break_match_case()
+
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
                         raise KeyboardInterrupt()
@@ -744,9 +760,15 @@ def main():
                     download_text(driver, index, hw_list[index])
 
                 case "fill_answers":
-                    index = int(
-                        session.prompt("homework index to fill in answers: ").strip()
-                    )
+                    if len(input_parts) <= 1:
+                        print("<error> argument not enough")
+                        break_match_case()
+
+                    index = parse_int(input_parts[1])
+                    if index is None:
+                        print("<error> argument invalid")
+                        break_match_case()
+
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
                         raise KeyboardInterrupt()
@@ -768,42 +790,50 @@ def main():
                     options.extend(
                         map(
                             lambda c: (
-                                f"{c.api_url}|{c.api_key}",
-                                f"{c.api_url} / {c.api_key}",
+                                c[0],
+                                f"{c[1].api_url} / {c[1].api_key}",
                             ),
-                            config.ai_clients.all,
-                        )
+                            enumerate(config.ai_client.all),
+                        )  # type: ignore
                     )
+                    default_choice = "none"
+                    if isinstance(config.ai_client.default, int):
+                        default_choice = config.ai_client.default
                     ai_choice = choice(
                         "select AI client to use:",
                         options=options,
+                        default=default_choice,
                     )
                     if ai_choice == "none":
                         ai_client = None
+                        config.ai_client.default = None
                         print("<info> AI features disabled")
                     else:
-                        ai_choice_keys = ai_choice.split("|")
-                        ai_client_conf = next(
-                            (
-                                c
-                                for c in config.ai_clients.all
-                                if c.api_url == ai_choice_keys[0]
-                                and c.api_key == ai_choice_keys[1]
-                            ),
-                            None,
+                        ai_client_conf = config.ai_client.all[ai_choice]
+                        ai_client = AIClient(
+                            ai_client_conf.api_url, ai_client_conf.api_key
                         )
-                        ai_client = AIClient(ai_client_conf.api_url, ai_client_conf.api_key)  # type: ignore
-                        print(f"<info> selected AI client: {ai_client.api_url} / {ai_client.api_key}")  # type: ignore
+                        config.ai_client.default = ai_choice
+                        print(
+                            f"<info> selected AI client: {ai_client.api_url} / {ai_client.api_key}"
+                        )
+
+                case "reload_config":
+                    config = _load_config()
+                    print("<info> reloaded config file")
+                    print("<info> note: current AI client selection is not changed")
 
                 case "exit":
                     print("<info> exiting...")
+                    _save_config(config)
+                    print("<info> saved config to file")
                     break
-
-                case "":
-                    ...
 
                 case _:
                     print(f"<error> unrecognized command: '{user_input}'")
+        except BreakMatchCase:
+            continue
+
         except KeyboardInterrupt:
             continue
 

@@ -736,7 +736,7 @@ def main():
                             print("<error> argument invalid")
 
                 case "text":
-                    if len(input_parts) < 2:
+                    if len(input_parts) < 3:
                         print("<error> argument not enough")
                         continue
                     index = parse_int(input_parts[2])

@@ -1,6 +1,18 @@
 URL_LOGIN = "https://admin.jeedu.net/login"
 URL_HOMEWORK_LIST = "https://admin.jeedu.net/exam/studentTaskList"
 
+SCHOOL_SELECTOR = ".el-select > div:nth-child(1) > input:nth-child(1)"
+SCHOOL_ITEM_SELECTOR = ".el-select-dropdown__item > span:nth-child(1)"
+ACCOUNT_SELECTOR = (
+    "div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > input:nth-child(1)"
+)
+PASSWORD_SELECTOR = (
+    "div:nth-child(3) > div:nth-child(1) > div:nth-child(1) > input:nth-child(1)"
+)
+SLIDER_HANDLE_SELECTOR = ".el-icon-d-arrow-right"
+LOGIN_BUTTON_SELECTOR = "div.el-form-item:nth-child(7) > div:nth-child(1) > button:nth-child(1) > span:nth-child(1) > span:nth-child(1)"
+
+HOMEWORK_TABLE_SELECTOR = "tr.el-table__row"
 START_TIME_SELECTOR = "td:nth-child(1) > div:nth-child(1) > span:nth-child(1)"
 END_TIME_SELECTOR = "td:nth-child(2) > div:nth-child(1) > span:nth-child(1)"
 TITLE_SELECTOR = "td:nth-child(3) > div:nth-child(1) > span:nth-child(1)"
@@ -14,8 +26,6 @@ TOTAL_SCORE_SELECTOR = (
 )
 IS_PASS_SELECTOR = "td:nth-child(7) > div:nth-child(1) > span:nth-child(1)"
 TEACHER_WORDS_SELECTOR = "td:nth-child(9) > div:nth-child(1)"
-HOMEWORK_TABLE_SELECTOR = "tr.el-table__row"
-LOGIN_BUTTON_SELECTOR = "div.el-form-item:nth-child(7) > div:nth-child(1) > button:nth-child(1) > span:nth-child(1) > span:nth-child(1)"
 STATUS_SELECTOR = (
     "td:nth-child(11) > div:nth-child(1) > button:nth-child(1) > span:nth-child(1)"
 )
@@ -25,14 +35,6 @@ VIEW_COMPLETED_BUTTON_SELECTOR = (
 VIEW_ORIGINAL_BUTTON_SELECTOR = (
     "td:nth-child(12) > div:nth-child(1) > div:nth-child(1) > button:nth-child(2)"
 )
-SCHOOL_SELECTOR = ".el-select > div:nth-child(1) > input:nth-child(1)"
-SCHOOL_ITEM_SELECTOR = ".el-select-dropdown__item > span:nth-child(1)"
-ACCOUNT_SELECTOR = (
-    "div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > input:nth-child(1)"
-)
-PASSWORD_SELECTOR = (
-    "div:nth-child(3) > div:nth-child(1) > div:nth-child(1) > input:nth-child(1)"
-)
-SLIDER_HANDLE_SELECTOR = ".el-icon-d-arrow-right"
+NEXT_PAGE_BUTTON_SELECTOR = ".btn-next"
 
 DRAG_DISTANCE_PIXELS = 300

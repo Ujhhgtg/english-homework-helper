@@ -163,58 +163,69 @@ def login(driver):
     login_button.click()
 
 
-def get_homework_list(driver) -> list[HomeworkRecord]:
+def get_list(driver: FirefoxDriver) -> list[HomeworkRecord]:
     """Finds and extracts data from all homework rows on the current page (table structure)."""
 
-    print("--- step: parse homework list ---")
+    print("--- step: retrieve homework list ---")
     homework_records: list[HomeworkRecord] = []
 
     try:
-        wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
-        )
-
-        homework_rows = driver.find_elements(By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR)
-
-        if not homework_rows:
-            print(
-                "<warning> no homework items found using selector:",
-                HOMEWORK_TABLE_SELECTOR,
+        while True:
+            wait.until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR)
+                )
             )
-            return []
-
-        print(f"<info> found {len(homework_rows)} homework items to parse")
-
-        for i, row in enumerate(homework_rows):
-            title = row.find_element(By.CSS_SELECTOR, TITLE_SELECTOR).text
-            start_time = _safe_get_text(row, START_TIME_SELECTOR)
-            end_time = _safe_get_text(row, END_TIME_SELECTOR)
-            teacher_name = _safe_get_text(row, TEACHER_SELECTOR)
-            pass_score = _safe_get_text(row, PASS_SCORE_SELECTOR)
-            current_score = _safe_get_text(row, CURRENT_SCORE_SELECTOR)
-            total_score = _safe_get_text(row, TOTAL_SCORE_SELECTOR)
-            is_pass = _safe_get_text(row, IS_PASS_SELECTOR)
-            teacher_words = _safe_get_text(row, TEACHER_WORDS_SELECTOR)
-            status_text = _safe_get_text(row, STATUS_SELECTOR)
-            status_enum = _get_status_enum(status_text)
-
-            record = HomeworkRecord(
-                title=title,
-                start_time=start_time,
-                end_time=end_time,
-                teacher=teacher_name,
-                pass_score=pass_score,
-                current_score=current_score,
-                total_score=total_score,
-                is_pass=is_pass,
-                teacher_comment=teacher_words,
-                status=status_enum,
+            homework_rows = driver.find_elements(
+                By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR
             )
 
-            homework_records.append(record)
-            print(
-                f"<info> extracted {i + 1}: Title='{title}', Status='{status_enum} ({status_text})', Score='{current_score}/{total_score}'"
+            if not homework_rows:
+                print(
+                    f"<warning> no homework items found using selector: {HOMEWORK_TABLE_SELECTOR}"
+                )
+                break
+
+            print(f"<info> found {len(homework_rows)} homework items to parse")
+
+            for i, row in enumerate(homework_rows):
+                title = row.find_element(By.CSS_SELECTOR, TITLE_SELECTOR).text
+                start_time = _safe_get_text(row, START_TIME_SELECTOR)
+                end_time = _safe_get_text(row, END_TIME_SELECTOR)
+                teacher_name = _safe_get_text(row, TEACHER_SELECTOR)
+                pass_score = _safe_get_text(row, PASS_SCORE_SELECTOR)
+                current_score = _safe_get_text(row, CURRENT_SCORE_SELECTOR)
+                total_score = _safe_get_text(row, TOTAL_SCORE_SELECTOR)
+                is_pass = _safe_get_text(row, IS_PASS_SELECTOR)
+                teacher_words = _safe_get_text(row, TEACHER_WORDS_SELECTOR)
+                status_text = _safe_get_text(row, STATUS_SELECTOR)
+                status_enum = _get_status_enum(status_text)
+
+                record = HomeworkRecord(
+                    title=title,
+                    start_time=start_time,
+                    end_time=end_time,
+                    teacher=teacher_name,
+                    pass_score=pass_score,
+                    current_score=current_score,
+                    total_score=total_score,
+                    is_pass=is_pass,
+                    teacher_comment=teacher_words,
+                    status=status_enum,
+                )
+
+                homework_records.append(record)
+                print(
+                    f"<success> extracted {i + 1}: Title='{title}', Status='{status_enum} ({status_text})', Score='{current_score}/{total_score}'"
+                )
+
+            next_page_button = driver.find_element(
+                By.CSS_SELECTOR, NEXT_PAGE_BUTTON_SELECTOR
             )
+            if not next_page_button.get_attribute("disabled"):
+                next_page_button.click()
+            else:
+                break
 
         return homework_records
 
@@ -625,7 +636,7 @@ def main():
 
     goto_hw_list_page(driver)
 
-    hw_list: list[HomeworkRecord] = get_homework_list(driver)
+    hw_list: list[HomeworkRecord] = get_list(driver)
 
     # application.run_polling(allowed_updates=Update.ALL_TYPES)
 
@@ -677,7 +688,7 @@ def main():
                     print("  exit - exit the program")
 
                 case "list":
-                    hw_list = get_homework_list(driver)
+                    hw_list = get_list(driver)
 
                 case "download_audio":
                     if len(input_parts) <= 1:

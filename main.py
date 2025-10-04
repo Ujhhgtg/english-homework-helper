@@ -362,10 +362,15 @@ def transcribe_audio(index: int, record: HomeworkRecord):
     with open(transcription_file, "w", encoding="utf-8") as f:
         if isinstance(transcription, str):
             f.write(transcription)
-            print(f"<success> transcription saved to '{transcription_file}'")
+            print(
+                f"<success> transcription saved to '{transcription_file}'; totalling {len(transcription)} chars in length"
+            )
         if isinstance(transcription, list):
-            f.write("\n".join(transcription))
-            print(f"<success> transcription saved to '{transcription_file}'")
+            trans_str = "\n".join(transcription)
+            f.write(trans_str)
+            print(
+                f"<success> transcription saved to '{transcription_file}'; totallin {len(trans_str)} chars in length"
+            )
 
 
 def get_text(driver: FirefoxDriver, index: int, record: HomeworkRecord) -> str | None:
@@ -414,7 +419,9 @@ def download_text(driver: FirefoxDriver, index: int, record: HomeworkRecord):
     text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
     with open(text_file, "w", encoding="utf-8") as f:
         f.write(homework_text)
-    print(f"<info> text content saved to '{text_file}'")
+    print(
+        f"<info> text content saved to '{text_file}'; totalling {len(homework_text)} chars in length"
+    )
 
 
 # TODO: fill-in-the-blanks questions

@@ -68,9 +68,10 @@ COMPLETION_WORD_MAP = {
         "text",
         "download",
     ): [],
-    ("answers",): ["download", "fill_in"],
+    ("answers",): ["download", "fill_in", "generate"],
     ("answers", "download"): [],
     ("answers", "fill_in"): [],
+    ("answers", "generate"): [],
     ("help",): [],
     ("account",): ["login", "logout", "select_default"],
     (
@@ -90,10 +91,69 @@ COMPLETION_WORD_MAP = {
         "ai",
         "select_api",
     ): [],
-    ("config",): ["reload"],
+    ("config",): ["reload", "save"],
     (
         "config",
         "reload",
     ): [],
+    (
+        "config",
+        "save",
+    ): [],
     ("exit",): [],
 }
+
+
+GENERATE_ANSWERS_WITH_LISTENING_PROMPT = """
+Complete the following listening comprehension.
+
+Listening audio transcription:
+```
+{transcription}
+```
+
+Questions:
+```
+{questions}
+```
+
+Output format: 
+```
+[
+    {
+        "index": 0,
+        "type": "choice",
+        "option": "A"
+    },
+    # other answers
+]
+```
+
+Output requirements: NO MARKDOWN, NO COMMENTS, ONLY PURE JSON
+"""
+
+GENERATE_ANSWERS_PROMPT = """
+Questions:
+```
+{questions}
+```
+
+Output format: 
+```
+[
+    {
+        "index": 0,
+        "type": "choice",
+        "option": "A"
+    },
+    {
+        "index": 1,
+        "type": "fill-in-blanks",
+        "option": "answer to the question"
+    },
+    # other answers
+]
+```
+
+Output requirements: NO MARKDOWN, NO COMMENTS, ONLY PURE JSON
+"""

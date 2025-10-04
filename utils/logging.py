@@ -11,11 +11,11 @@ def print(*args, **kwargs):
         highlighter = ReprHighlighter()
         highlighter.highlights.extend(
             [
-                r"(?i)(?P<debug>debug)",
-                r"(?i)(?P<success>success)",
-                r"(?i)(?P<info>info)",
-                r"(?i)(?P<warning>warning)",
-                r"(?i)(?P<error>error)",
+                r"(?i)\<(?P<debug>debug)\>",
+                r"(?i)\<(?P<success>success)\>",
+                r"(?i)\<(?P<info>info)\>",
+                r"(?i)\<(?P<warning>warning)\>",
+                r"(?i)\<(?P<error>error)\>",
             ]
         )
         theme = Theme(

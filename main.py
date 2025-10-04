@@ -9,6 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.keys import Keys
+import openai
 import time
 import atexit
 from prompt_toolkit import PromptSession
@@ -34,7 +35,7 @@ import json
 import shlex
 from munch import Munch, munchify
 
-from constants import *
+from utils.constants import *
 from models.homework_record import HomeworkRecord
 from models.homework_status import HomeworkStatus
 from models.ai_client import AIClient
@@ -48,8 +49,8 @@ from utils.prompt import LastWordCompleter
 driver: FirefoxDriver = None  # type: ignore
 wait: WebDriverWait = None  # type: ignore
 whisper_model: whisper.model.Whisper | None = None
-session: PromptSession = PromptSession()
 config: Munch = None  # type: ignore
+session: PromptSession = PromptSession()
 
 
 def _at_exit():
@@ -66,8 +67,6 @@ def _at_exit():
 def _safe_get_text(element, selector: str):
     """Safely finds and returns the text of a child element, returns None on failure."""
     try:
-        # Use a dot prefix for relative CSS selectors when using find_element
-        # Since the elements are nested within the table row, we use the relative selector
         return element.find_element(By.CSS_SELECTOR, selector).text
     except:
         return None
@@ -85,12 +84,38 @@ def _get_status_enum(status_text: str | None) -> HomeworkStatus | None:
     return None
 
 
+def _read_file_string(path: str) -> str:
+    with open(path, "rt", encoding="utf-8") as f:
+        return f.read()
+
+
 def goto_hw_list_page(driver: FirefoxDriver):
     driver.get(URL_HOMEWORK_LIST)
     wait.until(
         EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
     )
     print(f"<info> navigated to: {URL_HOMEWORK_LIST}")
+
+
+def goto_hw_details_page(index: int, record: HomeworkRecord):
+    row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
+    if (
+        record.status == HomeworkStatus.NOT_COMPLETED
+        or record.status == HomeworkStatus.IN_PROGRESS
+        or record.status == HomeworkStatus.MAKE_UP
+    ):
+        button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
+    elif record.status == HomeworkStatus.COMPLETED:
+        button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
+    else:
+        print(f"<error> unsupported homework status: {record.status}")
+        return
+
+    button_element = wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
+    )
+    button_element.click()
+    print("<info> opened hw details page")
 
 
 def login(driver: FirefoxDriver, credentials: Munch):
@@ -107,8 +132,9 @@ def login(driver: FirefoxDriver, credentials: Munch):
     school_field.send_keys(school_string)
     print(f"<info> entered '{school_string}' into school field")
     # input()
-    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR)))
-    driver.find_element(By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR).click()
+    wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR))
+    ).click()
     print(f"<info> selected school item")
 
     account_string = credentials.username
@@ -117,7 +143,7 @@ def login(driver: FirefoxDriver, credentials: Munch):
 
     password_string = credentials.password
     driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR).send_keys(password_string)
-    print(f"<info> entered '{password_string}' into password field")
+    print(f"<info> entered '{mask_string_middle(password_string)}' into password field")
 
     slider_handle = wait.until(
         EC.presence_of_element_located((By.CSS_SELECTOR, SLIDER_HANDLE_SELECTOR))
@@ -134,12 +160,9 @@ def login(driver: FirefoxDriver, credentials: Munch):
     wait.until(
         EC.presence_of_element_located((By.CSS_SELECTOR, ACCOUNT_DROPDOWN_SELECTOR))
     )
-    # cancel_button = driver.safe_find_element(
-    #     By.CSS_SELECTOR, SECURITY_DIALOG_SECONDARY_BUTTON_SELECTOR
-    # )
-    # if cancel_button is not None:
-    #     cancel_button.click()
-    driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+    driver.find_element(By.TAG_NAME, "body").send_keys(
+        Keys.ESCAPE
+    )  # close "set security questions" dialog
     print("<success> logged in")
 
 
@@ -237,42 +260,11 @@ def download_audio(driver: FirefoxDriver, index: int, record: HomeworkRecord):
     print(f"--- step: download audio of index {index} ---")
 
     try:
-        row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
+        goto_hw_details_page(index, record)
 
-        if (
-            record.status == HomeworkStatus.NOT_COMPLETED
-            or record.status == HomeworkStatus.IN_PROGRESS
-            or record.status == HomeworkStatus.MAKE_UP
-        ):
-            button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
-        elif record.status == HomeworkStatus.COMPLETED:
-            button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
-        else:
-            print(f"<error> unsupported homework status: {record.status}")
-            return None
-
-        button_element = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
-        )
-
-        button_element.click()
-        print("<info> clicked 'go complete hw' button")
-
-        if (
-            record.status == HomeworkStatus.NOT_COMPLETED
-            or record.status == HomeworkStatus.IN_PROGRESS
-            or record.status == HomeworkStatus.MAKE_UP
-        ):
-            audio_selector = "#taskContent > p:nth-child(1) > audio:nth-child(1)"
-        elif record.status == HomeworkStatus.COMPLETED:
-            audio_selector = "#content1 > p:nth-child(1) > audio:nth-child(1)"
-        else:
-            print(f"<error> unsupported homework status: {record.status}")
-            return
-
-        audio_element = driver.safe_find_element(By.CSS_SELECTOR, audio_selector)
-        if not audio_element:
-            print(f"<error> audio element not found using selector: {audio_selector}")
+        audio_element = driver.safe_find_element(By.TAG_NAME, "audio")
+        if audio_element is None:
+            print(f"<error> audio element not found")
             goto_hw_list_page(driver)
             return
         audio_url = audio_element.get_attribute("src")
@@ -376,26 +368,7 @@ def transcribe_audio(index: int, record: HomeworkRecord):
 def get_text(driver: FirefoxDriver, index: int, record: HomeworkRecord) -> str | None:
     print(f"--- step: retreive text content of index {index} ---")
 
-    row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
-
-    if (
-        record.status == HomeworkStatus.NOT_COMPLETED
-        or record.status == HomeworkStatus.IN_PROGRESS
-        or record.status == HomeworkStatus.MAKE_UP
-    ):
-        button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
-    elif record.status == HomeworkStatus.COMPLETED:
-        button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
-    else:
-        print(f"<error> unsupported homework status: {record.status}")
-        return None
-
-    button_element = wait.until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
-    )
-
-    button_element.click()
-    print("<info> clicked 'go complete hw' button")
+    goto_hw_details_page(index, record)
 
     print(f"<info> scraping text content using selector: {PAPER_SELECTOR}")
     paper_element = wait.until(
@@ -430,24 +403,7 @@ def fill_answers(
 ) -> None:
     print(f"--- step: fill in answers for index {index} ---")
 
-    row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
-    if (
-        record.status == HomeworkStatus.NOT_COMPLETED
-        or record.status == HomeworkStatus.IN_PROGRESS
-        or record.status == HomeworkStatus.MAKE_UP
-    ):
-        button_selector = f"{row_selector_nth} > {STATUS_SELECTOR}"
-    elif record.status == HomeworkStatus.COMPLETED:
-        button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
-    else:
-        print(f"<error> unsupported homework status: {record.status}")
-        return
-
-    button_element = wait.until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
-    )
-    button_element.click()
-    print("<info> clicked 'go complete hw' button")
+    goto_hw_details_page(index, record)
 
     quiz_container_id = "content1"
 
@@ -478,9 +434,8 @@ def fill_answers(
 
         try:
             time.sleep(0.5)
-            radio_button = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
-            radio_button.click()
-            print(f"<info> ✅ question {q_num}: selected option {answer_letter}")
+            wait.until(EC.element_to_be_clickable((By.XPATH, xpath))).click()
+            print(f"<success> ✅ question {q_num}: selected option {answer_letter}")
 
         except Exception as e:
             print(
@@ -488,6 +443,75 @@ def fill_answers(
             )
 
     print("<info> all answers filled in; please review and submit manually")
+
+
+def generate_answers(
+    driver: FirefoxDriver, index: int, record: HomeworkRecord, client: AIClient
+) -> dict | None:
+    print(f"--- step: generate answers for index {index} ---")
+
+    goto_hw_details_page(index, record)
+
+    has_audio = driver.safe_find_element(By.TAG_NAME, "audio") is not None
+    transcription_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
+    if has_audio:
+        if not Path(transcription_file).is_file():
+            print(
+                "<error> transcription does not exist; please transcribe the audio first"
+            )
+            return None
+    else:
+        print("<info> homework item seems not to have listening part; skipping that")
+
+    text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
+    if not Path(text_file).is_file():
+        print("<error> text content does not exist; please download it first")
+        return None
+
+    if has_audio:
+        prompt = GENERATE_ANSWERS_WITH_LISTENING_PROMPT.replace(
+            "{transcription}", _read_file_string(transcription_file)
+        ).replace("{questions}", _read_file_string(text_file))
+    else:
+        prompt = GENERATE_ANSWERS_PROMPT.replace(
+            "{questions}", _read_file_string(text_file)
+        )
+
+    print("<info> requesting model for a response (this may take a while)...")
+    try:
+        response = client.client.chat.completions.create(
+            model=client.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "You are a professional English teacher.",
+                        }
+                    ],
+                },
+                {"role": "user", "content": [{"type": "text", "text": prompt}]},
+            ],
+        )
+    except openai.APIError as e:
+        print(f"<error> api returned error: {e}")
+        goto_hw_list_page(driver)
+        return None
+
+    raw_data = response.choices[0].message.content
+    if raw_data is None:
+        print("<error> model returned null")
+        goto_hw_list_page(driver)
+        return None
+    print(f"<success> model result is valid")
+    goto_hw_list_page(driver)
+
+    try:
+        return json.loads(raw_data)
+    except json.JSONDecodeError as e:
+        print(f"<error> critical error during json decode of model result: {e}")
+        return None
 
 
 # hw_list: list[HomeworkRecord] = []
@@ -635,7 +659,9 @@ def main():
         default_index = config.ai_client.default
         if 0 <= default_index < len(config.ai_client.all):
             ai_client_conf = config.ai_client.all[default_index]
-            ai_client = AIClient(ai_client_conf.api_url, ai_client_conf.api_key)  # type: ignore
+            ai_client = AIClient(
+                ai_client_conf.api_url, ai_client_conf.api_key, ai_client_conf.model
+            )
             print(f"<info> using default AI client at index {default_index}")
         else:
             print(
@@ -700,16 +726,14 @@ def main():
                     print("available commands:")
                     print("  audio - download/transcribe audio of a homework item")
                     print("  text - display/download text content of a homework item")
-                    print("  answer - fill in answers for a homework item")
+                    print(
+                        "  answers - fill in/download/generate answers for a homework item"
+                    )
                     print("  help - show this help message")
                     print("  list - list all homework items")
-                    print("  login - (re-)log in with another credentials")
-                    print("  logout - log out")
-                    print("  select_ai_client - select AI client for AI-based features")
-                    print(
-                        "  select_default_credentials - select default credentials used for logging in"
-                    )
-                    print("  reload_config - reload configuration from file")
+                    print("  account - login/logout/select default account")
+                    print("  ai - select AI client")
+                    print("  config - reload/save configuration")
                     print("  exit - exit the program")
 
                 case "list":
@@ -772,7 +796,7 @@ def main():
                         continue
                     if index < 0 or index >= len(hw_list):
                         print(f"<error> index out of range: {index}")
-                        raise KeyboardInterrupt()
+                        continue
 
                     match input_parts[1]:
                         case "fill_in":
@@ -788,10 +812,19 @@ def main():
                                 print(
                                     f"<error> invalid answers format: '{answers_input}'"
                                 )
-                                raise KeyboardInterrupt()
+                                continue
                             fill_answers(driver, index, hw_list[index], answers)
                         case "download":
                             raise NotImplementedError()
+                        case "generate":
+                            if ai_client is None:
+                                print("<error> no ai client selected")
+                                continue
+                            answers = generate_answers(
+                                driver, index, hw_list[index], ai_client
+                            )
+                            print(answers)
+
                         case _:
                             print("<error> argument invalid")
 
@@ -873,7 +906,7 @@ def main():
                                 map(
                                     lambda c: (
                                         c[0],
-                                        f"{c[1].api_url} / {mask_string_middle(c[1].api_key)}",
+                                        f"{c[1].api_url} / {mask_string_middle(c[1].api_key)} / {c[1].model}",
                                     ),
                                     enumerate(config.ai_client.all),
                                 )  # type: ignore
@@ -894,11 +927,13 @@ def main():
 
                             ai_client_conf = config.ai_client.all[cred_choice]
                             ai_client = AIClient(
-                                ai_client_conf.api_url, ai_client_conf.api_key
+                                ai_client_conf.api_url,
+                                ai_client_conf.api_key,
+                                ai_client_conf.model,
                             )
                             config.ai_client.default = cred_choice
                             print(
-                                f"<info> selected AI client: {ai_client.api_url} / {mask_string_middle(ai_client.api_key)}"
+                                f"<info> selected AI client: {ai_client.api_url} / {mask_string_middle(ai_client.api_key)} / {ai_client.model}"
                             )
                         case _:
                             print("<error> argument invalid")
@@ -913,6 +948,9 @@ def main():
                             config = _load_config()
                             print("<info> reloaded config file")
                             print("<info> note: current states are not changed")
+                        case "save":
+                            _save_config(config)
+                            print("<info> saved config to file")
                         case _:
                             print("<error> argument invalid")
 

@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from turtle import st
-from regex import F
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import (
     Options as FirefoxOptions,
@@ -14,24 +11,25 @@ from selenium.webdriver.support.ui import WebDriverWait
 import time
 import atexit
 from prompt_toolkit import PromptSession
-from prompt_toolkit.patch_stdout import patch_stdout
+
+# from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.shortcuts import choice
 from prompt_toolkit.completion import WordCompleter
 import urllib.request
 import threading
-from sympy import N
 import whisper
 from pathlib import Path
-import telegram
-from telegram import Update, ForceReply
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-    ConversationHandler,
-)
+
+# import telegram
+# from telegram import Update, ForceReply
+# from telegram.ext import (
+#     Application,
+#     CommandHandler,
+#     MessageHandler,
+#     filters,
+#     ContextTypes,
+#     ConversationHandler,
+# )
 import json
 import shlex
 from munch import Munch, munchify
@@ -41,14 +39,11 @@ from models.homework_record import HomeworkRecord
 from models.homework_status import HomeworkStatus
 from models.ai_client import AIClient
 
-# from local.credentials import CREDENTIALS_LIST
-# from local.ai_clients import AI_CLIENT_LIST
-
-# from local.telegram_bot_token import TELEGRAM_BOT_TOKEN
 from utils.webdriver import FirefoxDriver
 from utils.exceptions import break_match_case, BreakMatchCase
 from utils.logging import print
 from utils.convert import parse_int
+from utils.crypto import encodeb64_safe, decodeb64_safe
 
 
 driver_options = FirefoxOptions()
@@ -191,7 +186,7 @@ def get_homework_list(driver) -> list[HomeworkRecord]:
         print(f"<info> found {len(homework_rows)} homework items to parse")
 
         for i, row in enumerate(homework_rows):
-            title = _safe_get_text(row, TITLE_SELECTOR)
+            title = row.find_element(By.CSS_SELECTOR, TITLE_SELECTOR).text
             start_time = _safe_get_text(row, START_TIME_SELECTOR)
             end_time = _safe_get_text(row, END_TIME_SELECTOR)
             teacher_name = _safe_get_text(row, TEACHER_SELECTOR)
@@ -276,15 +271,10 @@ def download_audio(driver: FirefoxDriver, index: int, record: HomeworkRecord):
 
         if not audio_url:
             print("<error> audio source url not found on the task page")
-            driver.back()
-            wait.until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR)
-                )
-            )
+            goto_hw_list_page(driver)
             return
 
-        filename = f"cache/homework_{index}_audio.mp3"
+        filename = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
         try:
             print(f"<info> downloading audio from: {audio_url}")
             urllib.request.urlretrieve(audio_url, filename)
@@ -300,12 +290,12 @@ def download_audio(driver: FirefoxDriver, index: int, record: HomeworkRecord):
         print(f"<error> critical error during audio download: {e}")
 
 
-def transcribe_audio(index: int):
+def transcribe_audio(index: int, record: HomeworkRecord):
     global whisper_model, config
 
     print(f"--- step: transcribe audio of index {index} ---")
 
-    audio_file = f"cache/homework_{index}_audio.mp3"
+    audio_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
 
     # global whisper_model
     # if whisper_model is None:
@@ -333,7 +323,9 @@ def transcribe_audio(index: int):
     # print(f"<success> transcription saved to '{transcription_file}'")
 
     if whisper_model is None:
-        print("<info> loading Whisper model (this may take a while)...")
+        print(
+            f"<info> loading Whisper model{" into memory" if config.whisper.in_memory else ""} (this may take a while)..."
+        )
         whisper_device = None
         if config.whisper.device == "cuda":
             whisper_device = "cuda"
@@ -413,7 +405,7 @@ def download_text(driver: FirefoxDriver, index: int, record: HomeworkRecord):
         print(f"<error> failed to retrieve text content for index {index}")
         return
 
-    text_file = f"cache/homework_{index}_text.txt"
+    text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
     with open(text_file, "w", encoding="utf-8") as f:
         f.write(homework_text)
     print(f"<info> text content saved to '{text_file}'")
@@ -717,7 +709,7 @@ def main():
                     #     print(f"<error> index out of range: {index}")
                     #     break_match_case()
 
-                    audio_file = f"cache/homework_{index}_audio.mp3"
+                    audio_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_audio.mp3"
 
                     if not Path(audio_file).is_file():
                         print(
@@ -725,7 +717,7 @@ def main():
                         )
                         break_match_case()
 
-                    transcribe_audio(index)
+                    transcribe_audio(index, hw_list[index])
 
                 case "get_text":
                     if len(input_parts) <= 1:

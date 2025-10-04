@@ -7,7 +7,7 @@ from models.homework_status import HomeworkStatus
 class HomeworkRecord:
     """Represents a single record from the homework table."""
 
-    title: str | None
+    title: str
     start_time: str | None
     end_time: str | None
     teacher: str | None

@@ -74,7 +74,7 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
     ```json
     {
         ...
-        "ai_clients": {
+        "ai_client": {
             "default": 0,
             "all": [
                 {
@@ -112,7 +112,7 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
     ```json
     {
         ...
-        "ai_clients": {
+        "ai_client": {
             "default": 0,
             "all": [
                 {

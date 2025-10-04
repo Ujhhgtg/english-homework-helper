@@ -12,7 +12,7 @@
             }
         ]
     },
-    "ai_clients": {
+    "ai_client": {
         "default": 0,
         "all": [
             {

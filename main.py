@@ -461,7 +461,7 @@ def generate_answers(
             )
             return None
     else:
-        print("<info> homework item seems not to have listening part; skipping that")
+        print("<warning> homework item seems not to have listening part; skipping that")
 
     text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
     if not Path(text_file).is_file():
@@ -477,6 +477,7 @@ def generate_answers(
             "{questions}", _read_file_string(text_file)
         )
 
+    print(f"<info> current AI client: {client.describe()}")
     print("<info> requesting model for a response (this may take a while)...")
     try:
         response = client.client.chat.completions.create(
@@ -684,23 +685,7 @@ def main():
                 f"<warning> default credentials index {default_index} out of range; not logging in"
             )
     else:
-        print(f"<info> no default credentials provided; not logging in")
-    # if credentials is None:
-    #     credentials_choice = choice(
-    #         "select credentials to use:",
-    #         options=list(
-    #             map(
-    #                 lambda c: (
-    #                     c.username,
-    #                     f"{c.school} / {c.username} / {mask_string_middle(c.password)}",
-    #                 ),
-    #                 config.credentials.all,
-    #             )
-    #         ),
-    #     )
-    #     credentials = next(
-    #         c for c in config.credentials.all if c.username == credentials_choice
-    #     )
+        print(f"<warning> no default credentials provided; not logging in")
 
     # application.run_polling(allowed_updates=Update.ALL_TYPES)
 
@@ -839,7 +824,7 @@ def main():
                                 map(
                                     lambda c: (
                                         c[0],
-                                        f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
+                                        c[1].describe(),
                                     ),
                                     enumerate(config.credentials.all),
                                 )
@@ -868,7 +853,7 @@ def main():
                                 map(
                                     lambda c: (
                                         c[0],
-                                        f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
+                                        c[1].describe(),
                                     ),
                                     enumerate(config.credentials.all),
                                 )  # type: ignore
@@ -889,7 +874,7 @@ def main():
                             config.credentials.default = cred_choice
                             cred = config.credentials.all[cred_choice]
                             print(
-                                f"<info> selected default credentials: {cred.school} / {cred.username} / {mask_string_middle(cred.password)}"
+                                f"<info> selected default credentials: {cred.describe()}"
                             )
                         case _:
                             print("<error> argument invalid")
@@ -906,7 +891,7 @@ def main():
                                 map(
                                     lambda c: (
                                         c[0],
-                                        f"{c[1].api_url} / {mask_string_middle(c[1].api_key)} / {c[1].model}",
+                                        c[1].describe(),
                                     ),
                                     enumerate(config.ai_client.all),
                                 )  # type: ignore
@@ -932,9 +917,7 @@ def main():
                                 ai_client_conf.model,
                             )
                             config.ai_client.default = cred_choice
-                            print(
-                                f"<info> selected AI client: {ai_client.api_url} / {mask_string_middle(ai_client.api_key)} / {ai_client.model}"
-                            )
+                            print(f"<info> selected AI client: {ai_client.describe()}")
                         case _:
                             print("<error> argument invalid")
 

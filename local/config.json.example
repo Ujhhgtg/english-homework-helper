@@ -1,4 +1,7 @@
 {
+    "browser": {
+        "headless": true
+    },
     "credentials": {
         "default": 0,
         "all": [

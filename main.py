@@ -739,7 +739,7 @@ def main():
                     if len(input_parts) < 2:
                         print("<error> argument not enough")
                         continue
-                    index = parse_int(input_parts[1])
+                    index = parse_int(input_parts[2])
                     if index is None:
                         print("<error> argument invalid")
                         continue
@@ -759,7 +759,7 @@ def main():
                     if len(input_parts) < 3:
                         print("<error> argument not enough")
                         continue
-                    index = parse_int(input_parts[1])
+                    index = parse_int(input_parts[2])
                     if index is None:
                         print("<error> argument invalid")
                         continue

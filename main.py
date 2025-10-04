@@ -8,6 +8,7 @@ from selenium.webdriver.firefox.options import (
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains  # Import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.keys import Keys
 import time
 import atexit
 from prompt_toolkit import PromptSession
@@ -42,14 +43,12 @@ from models.ai_client import AIClient
 from utils.webdriver import FirefoxDriver
 from utils.exceptions import break_match_case, BreakMatchCase
 from utils.logging import print
-from utils.convert import parse_int
-from utils.crypto import encodeb64_safe, decodeb64_safe
+from utils.convert import parse_int, mask_string_middle
+from utils.crypto import encodeb64_safe
 
 
-driver_options = FirefoxOptions()
-driver_options.add_argument("--headless")
-driver = FirefoxDriver(options=driver_options)
-wait = WebDriverWait(driver, 15)
+driver: FirefoxDriver = None  # type: ignore
+wait: WebDriverWait = None  # type: ignore
 whisper_model: whisper.model.Whisper | None = None
 session = PromptSession()
 config: Munch = None  # type: ignore
@@ -57,7 +56,7 @@ config: Munch = None  # type: ignore
 
 def _at_exit():
     global driver
-    if driver:
+    if driver is not None:
         try:
             driver.current_url
             driver.quit()
@@ -96,7 +95,7 @@ def goto_hw_list_page(driver: FirefoxDriver):
     print(f"<info> navigated to: {URL_HOMEWORK_LIST}")
 
 
-def login(driver):
+def login(driver: FirefoxDriver, credentials: Munch):
     global config
 
     print("--- step: login ---")
@@ -104,48 +103,22 @@ def login(driver):
     print(f"<info> navigated to: {URL_LOGIN}")
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)))
 
-    credentials = None
-    if config.credentials.default is not None:
-        default_index = config.credentials.default
-        if 0 <= default_index < len(config.credentials.all):
-            credentials = config.credentials.all[default_index]
-            print(f"<info> using default credentials at index {default_index}")
-        else:
-            print(
-                f"<warning> default credentials index {default_index} out of range; falling back to interactive selection"
-            )
-    if credentials is None:
-        credentials_choice = choice(
-            "select credentials to use:",
-            options=list(
-                map(
-                    lambda c: (c.username, f"{c.school} / {c.username} / {c.password}"),
-                    config.credentials.all,
-                )
-            ),
-        )
-        credentials = next(
-            c for c in config.credentials.all if c.username == credentials_choice
-        )
-
     school_string = credentials.school
     school_field = driver.find_element(By.CSS_SELECTOR, SCHOOL_SELECTOR)
     # school_field.click()
     school_field.send_keys(school_string)
     print(f"<info> entered '{school_string}' into school field")
-    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR)))
-    school_item = driver.find_element(By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR)
-    school_item.click()
+    # input()
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR)))
+    driver.find_element(By.CSS_SELECTOR, SCHOOL_ITEM_SELECTOR).click()
     print(f"<info> selected school item")
 
     account_string = credentials.username
-    account_field = driver.find_element(By.CSS_SELECTOR, ACCOUNT_SELECTOR)
-    account_field.send_keys(account_string)
+    driver.find_element(By.CSS_SELECTOR, ACCOUNT_SELECTOR).send_keys(account_string)
     print(f"<info> entered '{account_string}' into account field")
 
     password_string = credentials.password
-    password_field = driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR)
-    password_field.send_keys(password_string)
+    driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR).send_keys(password_string)
     print(f"<info> entered '{password_string}' into password field")
 
     slider_handle = wait.until(
@@ -159,8 +132,34 @@ def login(driver):
         f"<info> dragged slider {DRAG_DISTANCE_PIXELS} pixels to the right (x-offset)"
     )
 
-    login_button = driver.find_element(By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)
-    login_button.click()
+    driver.find_element(By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR).click()
+    wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ACCOUNT_DROPDOWN_SELECTOR))
+    )
+    # cancel_button = driver.safe_find_element(
+    #     By.CSS_SELECTOR, SECURITY_DIALOG_SECONDARY_BUTTON_SELECTOR
+    # )
+    # if cancel_button is not None:
+    #     cancel_button.click()
+    driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+    print("<success> logged in")
+
+
+def logout(driver: FirefoxDriver) -> None:
+    print("--- step: logout ---")
+
+    account_dropdown = driver.safe_find_element(
+        By.CSS_SELECTOR, ACCOUNT_DROPDOWN_SELECTOR
+    )
+    if account_dropdown is None:
+        print("<warning> cannot find account dropdown; seems to be already logged out")
+        return
+
+    account_dropdown.click()
+    driver.find_element(By.CSS_SELECTOR, LOGOUT_BUTTON_SELECTOR).click()
+    driver.find_element(By.CSS_SELECTOR, LOGOUT_DIALOG_PRIMARY_BUTTON_SELECTOR).click()
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)))
+    print("<success> logged out")
 
 
 def get_list(driver: FirefoxDriver) -> list[HomeworkRecord]:
@@ -599,7 +598,7 @@ def _save_config(config: Munch, path: str = "local/config.json") -> None:
 
 
 def main():
-    global config
+    global config, driver, wait
 
     print("--- english homework helper ---")
     print("--- by: ujhhgtg ---")
@@ -619,6 +618,15 @@ def main():
     config = _load_config()
     print("<info> loaded config file")
 
+    driver_options = FirefoxOptions()
+    if config.browser.headless:
+        driver_options.add_argument("--headless")
+    driver = FirefoxDriver(options=driver_options)
+    wait = WebDriverWait(driver, 15)
+    print(
+        f"<info> started browser{" in headless mode" if config.browser.headless else ""}"
+    )
+
     ai_client: AIClient | None = None
     if config.ai_client.default is not None:
         default_index = config.ai_client.default
@@ -631,8 +639,33 @@ def main():
                 f"<warning> default AI client index {default_index} out of range; falling back to no AI client"
             )
 
-    login(driver)
-    time.sleep(2)
+    credentials = None
+    if config.credentials.default is not None:
+        default_index = config.credentials.default
+        if 0 <= default_index < len(config.credentials.all):
+            credentials = config.credentials.all[default_index]
+            print(f"<info> using default credentials at index {default_index}")
+        else:
+            print(
+                f"<warning> default credentials index {default_index} out of range; falling back to interactive selection"
+            )
+    if credentials is None:
+        credentials_choice = choice(
+            "select credentials to use:",
+            options=list(
+                map(
+                    lambda c: (
+                        c.username,
+                        f"{c.school} / {c.username} / {mask_string_middle(c.password)}",
+                    ),
+                    config.credentials.all,
+                )
+            ),
+        )
+        credentials = next(
+            c for c in config.credentials.all if c.username == credentials_choice
+        )
+    login(driver, credentials)
 
     goto_hw_list_page(driver)
 
@@ -656,7 +689,9 @@ def main():
                         "fill_answers",
                         "help",
                         "list",
+                        "login",
                         "select_ai_client",
+                        "select_default_credentials",
                         "reload_config",
                         "exit",
                     ],
@@ -683,7 +718,11 @@ def main():
                     print("  fill_answers - fill in answers for a homework item")
                     print("  help - show this help message")
                     print("  list - list all homework items")
+                    print("  login - re-log in with another credentials")
                     print("  select_ai_client - select AI client for AI-based features")
+                    print(
+                        "  select_default_credentials - select default credentials used for logging in"
+                    )
                     print("  reload_config - reload configuration from file")
                     print("  exit - exit the program")
 
@@ -788,38 +827,94 @@ def main():
 
                     fill_answers(driver, index, hw_list[index], answers)
 
+                case "login":
+                    options = list(
+                        map(
+                            lambda c: (
+                                c[0],
+                                f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
+                            ),
+                            enumerate(config.credentials.all),
+                        )
+                    )  # type: ignore
+                    default = 0
+                    if isinstance(config.credentials.default, int):
+                        default = config.credentials.default
+                    cred_choice = choice(
+                        "select credentials to use:",
+                        options=options,
+                        default=default,
+                    )
+                    credentials = config.credentials.all[cred_choice]
+                    logout(driver)
+                    login(driver, credentials)
+                    goto_hw_list_page(driver)
+                    hw_list = get_list(driver)
+                    print(
+                        f"<success> logged in with credentials: {credentials.school} / {credentials.username} / {mask_string_middle(credentials.password)}"
+                    )
+
+                case "select_default_credentials":
+                    options = [("none", "always ask")]
+                    options.extend(
+                        map(
+                            lambda c: (
+                                c[0],
+                                f"{c[1].school} / {c[1].username} / {mask_string_middle(c[1].password)}",
+                            ),
+                            enumerate(config.credentials.all),
+                        )  # type: ignore
+                    )
+                    default = "none"
+                    if isinstance(config.credentials.default, int):
+                        default = config.credentials.default
+                    cred_choice = choice(
+                        "select default credentials to use:",
+                        options=options,
+                        default=default,
+                    )
+                    if cred_choice == "none":
+                        config.credentials.default = None
+                        print("<info> cleared default credentials")
+                        break_match_case()
+
+                    config.credentials.default = cred_choice
+                    cred = config.credentials.all[cred_choice]
+                    print(
+                        f"<info> selected default credentials: {cred.school} / {cred.username} / {mask_string_middle(cred.password)}"
+                    )
+
                 case "select_ai_client":
                     options = [("none", "disable AI features")]
                     options.extend(
                         map(
                             lambda c: (
                                 c[0],
-                                f"{c[1].api_url} / {c[1].api_key}",
+                                f"{c[1].api_url} / {mask_string_middle(c[1].api_key)}",
                             ),
                             enumerate(config.ai_client.all),
                         )  # type: ignore
                     )
-                    default_choice = "none"
+                    default = "none"
                     if isinstance(config.ai_client.default, int):
-                        default_choice = config.ai_client.default
-                    ai_choice = choice(
+                        default = config.ai_client.default
+                    cred_choice = choice(
                         "select AI client to use:",
                         options=options,
-                        default=default_choice,
+                        default=default,
                     )
-                    if ai_choice == "none":
+                    if cred_choice == "none":
                         ai_client = None
                         config.ai_client.default = None
                         print("<info> AI features disabled")
-                    else:
-                        ai_client_conf = config.ai_client.all[ai_choice]
-                        ai_client = AIClient(
-                            ai_client_conf.api_url, ai_client_conf.api_key
-                        )
-                        config.ai_client.default = ai_choice
-                        print(
-                            f"<info> selected AI client: {ai_client.api_url} / {ai_client.api_key}"
-                        )
+                        break_match_case()
+
+                    ai_client_conf = config.ai_client.all[cred_choice]
+                    ai_client = AIClient(ai_client_conf.api_url, ai_client_conf.api_key)
+                    config.ai_client.default = cred_choice
+                    print(
+                        f"<info> selected AI client: {ai_client.api_url} / {mask_string_middle(ai_client.api_key)}"
+                    )
 
                 case "reload_config":
                     config = _load_config()

@@ -12,6 +12,12 @@ PASSWORD_SELECTOR = (
 SLIDER_HANDLE_SELECTOR = ".el-icon-d-arrow-right"
 LOGIN_BUTTON_SELECTOR = "div.el-form-item:nth-child(7) > div:nth-child(1) > button:nth-child(1) > span:nth-child(1) > span:nth-child(1)"
 
+ACCOUNT_DROPDOWN_SELECTOR = ".avatar-container"
+LOGOUT_BUTTON_SELECTOR = ".el-dropdown-menu__item--divided"
+
+LOGOUT_DIALOG_PRIMARY_BUTTON_SELECTOR = "button.el-button--default:nth-child(2)"
+# SECURITY_DIALOG_SECONDARY_BUTTON_SELECTOR = "span.dialog-footer > button:nth-child(1)"
+
 HOMEWORK_TABLE_SELECTOR = "tr.el-table__row"
 START_TIME_SELECTOR = "td:nth-child(1) > div:nth-child(1) > span:nth-child(1)"
 END_TIME_SELECTOR = "td:nth-child(2) > div:nth-child(1) > span:nth-child(1)"

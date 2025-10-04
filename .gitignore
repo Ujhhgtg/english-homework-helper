@@ -1,8 +1,6 @@
 # Local files
 cache/
-local/credentials.py
-local/ai_clients.py
-local/telegram_bot_token.py
+local/config.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

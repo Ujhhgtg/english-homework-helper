@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import asyncio
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import (
@@ -33,33 +32,39 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
 )
+import json
+from munch import Munch, munchify
 
 from constants import *
 from models.homework_record import HomeworkRecord
 from models.homework_status import HomeworkStatus
 from models.ai_client import AIClient
-from local.credentials import CREDENTIALS_LIST
-from local.ai_clients import AI_CLIENT_LIST
-from local.telegram_bot_token import TELEGRAM_BOT_TOKEN
+
+# from local.credentials import CREDENTIALS_LIST
+# from local.ai_clients import AI_CLIENT_LIST
+
+# from local.telegram_bot_token import TELEGRAM_BOT_TOKEN
+from utils.webdriver import FirefoxDriver
 
 
 driver_options = FirefoxOptions()
-driver_options.binary_location = "/usr/bin/firefox"
-driver = webdriver.Firefox(options=driver_options)
+driver_options.add_argument("--headless")
+driver = FirefoxDriver(options=driver_options)
 wait = WebDriverWait(driver, 15)
 whisper_model: whisper.model.Whisper | None = None
 session = PromptSession()
-
-
-_console: Console | None = None
+rich_console: Console | None = None
+config: Munch = None  # type: ignore
 
 
 def print(*args, **kwargs):
-    global _console
-    if not _console:
+    global rich_console
+    if not rich_console:
         highlighter = ReprHighlighter()
         highlighter.highlights.extend(
             [
+                r"(?i)(?P<debug>debug)",
+                r"(?i)(?P<success>success)",
                 r"(?i)(?P<info>info)",
                 r"(?i)(?P<warning>warning)",
                 r"(?i)(?P<error>error)",
@@ -67,13 +72,15 @@ def print(*args, **kwargs):
         )
         theme = Theme(
             {
-                "repr.info": "bold green",
+                "repr.debug": "dim",
+                "repr.success": "bold green",
+                "repr.info": "bold blue",
                 "repr.warning": "bold yellow",
                 "repr.error": "bold red",
             }
         )
-        _console = Console(highlighter=highlighter, theme=theme)
-    _console.print(*args, **kwargs)
+        rich_console = Console(highlighter=highlighter, theme=theme)
+    rich_console.print(*args, **kwargs)
 
 
 def _close_browser_on_exit():
@@ -109,19 +116,45 @@ def _get_status_enum(status_text: str | None) -> HomeworkStatus | None:
     return None
 
 
-def login(driver):
-    print("--- step: login ---")
-
-    credentials_choice = choice(
-        "select credentials to use:",
-        options=list(
-            map(
-                lambda c: (c.username, f"{c.school} / {c.username} / {c.password}"),
-                CREDENTIALS_LIST,
-            )
-        ),
+def goto_hw_list_page(driver: FirefoxDriver):
+    driver.get(URL_HOMEWORK_LIST)
+    wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
     )
-    credentials = next(c for c in CREDENTIALS_LIST if c.username == credentials_choice)
+    print(f"<info> navigated to: {URL_HOMEWORK_LIST}")
+
+
+def login(driver):
+    global config
+
+    print("--- step: login ---")
+    driver.get(URL_LOGIN)
+    print(f"<info> navigated to: {URL_LOGIN}")
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)))
+
+    credentials = None
+    if config.credentials.default is not None:
+        default_index = config.credentials.default
+        if 0 <= default_index < len(config.credentials.all):
+            credentials = config.credentials.all[default_index]
+            print(f"<info> using default credentials at index {default_index}")
+        else:
+            print(
+                f"<warning> default credentials index {default_index} out of range; falling back to interactive selection"
+            )
+    if credentials is None:
+        credentials_choice = choice(
+            "select credentials to use:",
+            options=list(
+                map(
+                    lambda c: (c.username, f"{c.school} / {c.username} / {c.password}"),
+                    config.credentials.all,
+                )
+            ),
+        )
+        credentials = next(
+            c for c in config.credentials.all if c.username == credentials_choice
+        )
 
     school_string = credentials.school
     school_field = driver.find_element(By.CSS_SELECTOR, SCHOOL_SELECTOR)
@@ -220,7 +253,7 @@ def get_homework_list(driver) -> list[HomeworkRecord]:
         return []
 
 
-def download_audio(driver, index: int, record: HomeworkRecord):
+def download_audio(driver: FirefoxDriver, index: int, record: HomeworkRecord):
     print(f"--- step: download audio of index {index} ---")
 
     try:
@@ -257,15 +290,10 @@ def download_audio(driver, index: int, record: HomeworkRecord):
             print(f"<error> unsupported homework status: {record.status}")
             return
 
-        audio_element = driver.find_element(By.CSS_SELECTOR, audio_selector)
+        audio_element = driver.safe_find_element(By.CSS_SELECTOR, audio_selector)
         if not audio_element:
             print(f"<error> audio element not found using selector: {audio_selector}")
-            driver.get(URL_HOMEWORK_LIST)
-            wait.until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR)
-                )
-            )
+            goto_hw_list_page(driver)
             return
         audio_url = audio_element.get_attribute("src")
 
@@ -283,23 +311,21 @@ def download_audio(driver, index: int, record: HomeworkRecord):
         try:
             print(f"<info> downloading audio from: {audio_url}")
             urllib.request.urlretrieve(audio_url, filename)
-            print(f"<info> download successful! file saved as '{filename}'")
+            print(f"<success> download successful! file saved as '{filename}'")
         except Exception as download_e:
             print(
                 f"<error> failed to download audio using urllib.request: {download_e}"
             )
 
-        driver.get(URL_HOMEWORK_LIST)
-        wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
-        )
-        print("<info> navigated back to homework list page")
+        goto_hw_list_page(driver)
 
     except Exception as e:
         print(f"<error> critical error during audio download: {e}")
 
 
 def transcribe_audio(index: int):
+    global whisper_model, config
+
     print(f"--- step: transcribe audio of index {index} ---")
 
     audio_file = f"cache/homework_{index}_audio.mp3"
@@ -308,7 +334,7 @@ def transcribe_audio(index: int):
     # if whisper_model is None:
     #     print("<info> loading Whisper model (this may take a while)...")
     #     whisper_model = faster_whisper.WhisperModel(
-    #         "large", device="cuda", compute_type="float16"
+    #         config.whisper.model, device="cuda", compute_type="float16"
     #     )
     # else:
     #     print("<info> Whisper model already loaded")
@@ -327,12 +353,24 @@ def transcribe_audio(index: int):
     #             progress.update(task_id, completed=round(segment.end, 2))
     #             f.write(segment.text)
 
-    # print(f"<info> transcription successful! saved to '{transcription_file}'")
+    # print(f"<success> transcription successful! saved to '{transcription_file}'")
 
-    global whisper_model
     if whisper_model is None:
         print("<info> loading Whisper model (this may take a while)...")
-        whisper_model = whisper.load_model("large")
+        whisper_device = None
+        if config.whisper.device == "cuda":
+            whisper_device = "cuda"
+        elif config.whisper.device == "cpu":
+            whisper_device = "cpu"
+        elif config.whisper.device != "auto":
+            print(
+                f"<warning> unrecognized whisper device '{config.whisper.device}'; falling back to 'auto'"
+            )
+        whisper_model = whisper.load_model(
+            config.whisper.model,
+            device=whisper_device,
+            in_memory=config.whisper.in_memory,
+        )
     else:
         print("<info> Whisper model already loaded")
 
@@ -347,13 +385,17 @@ def transcribe_audio(index: int):
     with open(transcription_file, "w", encoding="utf-8") as f:
         if isinstance(transcription, str):
             f.write(transcription)
-            print(f"<info> transcription successful! saving to '{transcription_file}'")
+            print(
+                f"<success> transcription successful! saving to '{transcription_file}'"
+            )
         if isinstance(transcription, list):
             f.write("\n".join(transcription))
-            print(f"<info> transcription successful! saved to '{transcription_file}'")
+            print(
+                f"<success> transcription successful! saved to '{transcription_file}'"
+            )
 
 
-def get_text(driver, index: int, record: HomeworkRecord) -> str | None:
+def get_text(driver: FirefoxDriver, index: int, record: HomeworkRecord) -> str | None:
     print(f"--- step: retreive text content of index {index}")
 
     PAPER_SELECTOR = ".el-dialog__body"
@@ -385,16 +427,12 @@ def get_text(driver, index: int, record: HomeworkRecord) -> str | None:
     )
     homework_text = paper_element.text
 
-    driver.get(URL_HOMEWORK_LIST)
-    wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
-    )
-    print("<info> navigated back to homework list")
+    goto_hw_list_page(driver)
 
     return homework_text
 
 
-def download_text(driver, index: int, record: HomeworkRecord):
+def download_text(driver: FirefoxDriver, index: int, record: HomeworkRecord):
     print(f"--- step: download text content of index {index} ---")
 
     homework_text = get_text(driver, index, record)
@@ -408,7 +446,9 @@ def download_text(driver, index: int, record: HomeworkRecord):
     print(f"<info> text content saved to '{text_file}'")
 
 
-def fill_answers(driver, index: int, record: HomeworkRecord, answers: list[str]):
+def fill_answers(
+    driver: FirefoxDriver, index: int, record: HomeworkRecord, answers: list[str]
+):
     print(f"--- step: fill in answers for index {index} ---")
 
     row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
@@ -572,12 +612,14 @@ def fill_answers(driver, index: int, record: HomeworkRecord, answers: list[str])
 
 
 def main():
+    global config
+
     print("--- english homework helper ---")
     print("--- by: ujhhgtg ---")
     print("--- github: https://github.com/Ujhhgtg/english-homework-helper ---")
 
     # print("--- step: start telegram bot ---")
-    # application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    # application = Application.builder().token(config.telegram_bot_token).build()
 
     # application.add_handler(CommandHandler("list", command_list))
     # application.add_handler(CommandHandler("download_audio", command_download_audio))
@@ -587,22 +629,27 @@ def main():
     print("<info> registered atexit handler to close browser on exit")
     Path("./cache/").mkdir(parents=True, exist_ok=True)
     print("<info> created cache directory")
+    config = munchify(json.load(open("local/config.json", "r", encoding="utf-8")))  # type: ignore
+    print("<info> loaded config file")
 
-    driver.get(URL_LOGIN)
-    print(f"<info> navigated to: {URL_LOGIN}")
-    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOGIN_BUTTON_SELECTOR)))
+    ai_client: AIClient | None = None
+    if config.ai_clients.default is not None:
+        default_index = config.ai_clients.default
+        if 0 <= default_index < len(config.ai_clients.all):
+            ai_client_conf = config.ai_clients.all[default_index]
+            ai_client = AIClient(ai_client_conf.api_url, ai_client_conf.api_key)  # type: ignore
+            print(f"<info> using default AI client at index {default_index}")
+        else:
+            print(
+                f"<warning> default AI client index {default_index} out of range; falling back to no AI client"
+            )
 
     login(driver)
     time.sleep(2)
 
-    driver.get(URL_HOMEWORK_LIST)
-    print(f"<info> navigated to: {URL_HOMEWORK_LIST}")
-    wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, HOMEWORK_TABLE_SELECTOR))
-    )
+    goto_hw_list_page(driver)
 
     hw_list: list[HomeworkRecord] = get_homework_list(driver)
-    ai_client: AIClient | None = None
 
     # application.run_polling(allowed_updates=Update.ALL_TYPES)
 
@@ -724,7 +771,7 @@ def main():
                                 f"{c.api_url}|{c.api_key}",
                                 f"{c.api_url} / {c.api_key}",
                             ),
-                            AI_CLIENT_LIST,
+                            config.ai_clients.all,
                         )
                     )
                     ai_choice = choice(
@@ -736,15 +783,16 @@ def main():
                         print("<info> AI features disabled")
                     else:
                         ai_choice_keys = ai_choice.split("|")
-                        ai_client = next(
+                        ai_client_conf = next(
                             (
                                 c
-                                for c in AI_CLIENT_LIST
+                                for c in config.ai_clients.all
                                 if c.api_url == ai_choice_keys[0]
                                 and c.api_key == ai_choice_keys[1]
                             ),
                             None,
                         )
+                        ai_client = AIClient(ai_client_conf.api_url, ai_client_conf.api_key)  # type: ignore
                         print(f"<info> selected AI client: {ai_client.api_url} / {ai_client.api_key}")  # type: ignore
 
                 case "exit":

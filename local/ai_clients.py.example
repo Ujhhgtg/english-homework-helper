@@ -1,8 +1,0 @@
-from models.ai_client import AIClient
-
-AI_CLIENT_LIST: list[AIClient] = [
-    AIClient(
-        "api url",
-        "api key",
-    ),
-]

@@ -1,0 +1,27 @@
+{
+    "credentials": {
+        "default": 0,
+        "all": [
+            {
+                "school": "your_school",
+                "username": "your_username",
+                "password": "your_password"
+            }
+        ]
+    },
+    "ai_clients": {
+        "default": 0,
+        "all": [
+            {
+                "api_url": "api_url",
+                "api_key": "api_key"
+            }
+        ]
+    },
+    "whisper": {
+        "model": "large",
+        "device": "auto",
+        "in_memory": true
+    },
+    "telegram_bot_token": "your_telegram_bot_token"
+}

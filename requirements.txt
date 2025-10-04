@@ -6,4 +6,5 @@ openai
 # torch
 # torchvision
 # torchaudio
-python-telegram-bot
+# python-telegram-bot
+munch

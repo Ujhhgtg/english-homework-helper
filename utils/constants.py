@@ -38,12 +38,15 @@ STATUS_SELECTOR = (
 VIEW_COMPLETED_BUTTON_SELECTOR = (
     "td:nth-child(12) > div:nth-child(1) > div:nth-child(1) > button:nth-child(1)"
 )
+DIALOG_VIEW_COMPLETED_BUTTON_SELECTOR = "td.el-table_2_column_17 > div:nth-child(1) > button:nth-child(1) > span:nth-child(1)"
 VIEW_ORIGINAL_BUTTON_SELECTOR = (
     "td:nth-child(12) > div:nth-child(1) > div:nth-child(1) > button:nth-child(2)"
 )
 NEXT_PAGE_BUTTON_SELECTOR = ".btn-next"
 
 PAPER_SELECTOR = ".el-dialog__body"
+ANSWER_ROWS_SELECTOR = ".el-table--scrollable-y > div:nth-child(3) > table:nth-child(1) > tbody:nth-child(2) > tr"
+ANSWER_TEXT_SELECTOR = "td:nth-child(3) > div:nth-child(1) > span:nth-child(1)"
 
 DRAG_DISTANCE_PIXELS = 300
 
@@ -123,7 +126,7 @@ Output format (index starts at 1):
     {
         "index": 1,
         "type": "choice",
-        "option": "A"
+        "content": "A"
     },
     # other answers
 ]
@@ -147,12 +150,12 @@ Output format (index starts at 1):
     {
         "number": 1,
         "type": "choice",
-        "option": "A"
+        "content": "A"
     },
     {
         "index": 2,
         "type": "fill-in-blanks",
-        "option": "answer to the question"
+        "content": "answer to the question"
     },
     # other answers
 ]

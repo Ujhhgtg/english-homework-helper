@@ -49,7 +49,7 @@ def goto_hw_list_page():
     print(f"<info> navigated to: {URL_HOMEWORK_LIST}")
 
 
-def goto_hw_details_page(index: int, record: HomeworkRecord):
+def goto_hw_original_page(index: int, record: HomeworkRecord):
     row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
     if (
         record.status == HomeworkStatus.NOT_COMPLETED
@@ -63,11 +63,27 @@ def goto_hw_details_page(index: int, record: HomeworkRecord):
         print(f"<error> unsupported homework status: {record.status}")
         return
 
-    button_element = globalvars.wait.until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, button_selector))
+    globalvars.driver.find_element(By.CSS_SELECTOR, button_selector).click()
+    print("<info> opened hw original page")
+
+
+def goto_hw_completed_page(index: int, record: HomeworkRecord):
+    if record.status != HomeworkStatus.COMPLETED:
+        raise ValueError("homework status invalid: homework is not completed")
+
+    row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
+    globalvars.driver.find_element(
+        By.CSS_SELECTOR, f"{row_selector_nth} > {VIEW_COMPLETED_BUTTON_SELECTOR}"
+    ).click()
+    globalvars.wait.until(
+        EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, DIALOG_VIEW_COMPLETED_BUTTON_SELECTOR)
+        )
+    ).click()
+    globalvars.wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ANSWER_ROWS_SELECTOR))
     )
-    button_element.click()
-    print("<info> opened hw details page")
+    print("<info> opened hw completed page")
 
 
 def logout() -> None:
@@ -167,7 +183,7 @@ def download_audio(index: int, record: HomeworkRecord):
     print(f"--- step: download audio of index {index} ---")
 
     try:
-        goto_hw_details_page(index, record)
+        goto_hw_original_page(index, record)
 
         audio_element = globalvars.driver.safe_find_element(By.TAG_NAME, "audio")
         if audio_element is None:
@@ -275,7 +291,7 @@ def transcribe_audio(index: int, record: HomeworkRecord):
 def get_text(index: int, record: HomeworkRecord) -> str | None:
     print(f"--- step: retreive text content of index {index} ---")
 
-    goto_hw_details_page(index, record)
+    goto_hw_original_page(index, record)
 
     print(f"<info> scraping text content using selector: {PAPER_SELECTOR}")
     paper_element = globalvars.wait.until(
@@ -305,10 +321,10 @@ def download_text(index: int, record: HomeworkRecord):
 
 
 # TODO: fill-in-the-blanks questions
-def fill_answers(index: int, record: HomeworkRecord, answers: list[str]) -> None:
+def fill_in_answers(index: int, record: HomeworkRecord, answers: list[str]) -> None:
     print(f"--- step: fill in answers for index {index} ---")
 
-    goto_hw_details_page(index, record)
+    goto_hw_original_page(index, record)
 
     quiz_container_id = "content1"
 
@@ -350,12 +366,56 @@ def fill_answers(index: int, record: HomeworkRecord, answers: list[str]) -> None
     print("<info> all answers filled in; please review and submit manually")
 
 
+def get_answers(index: int, record: HomeworkRecord) -> list[dict]:
+    print(f"--- step: retrieve answers for index {index}: {record.title}")
+
+    if record.status != HomeworkStatus.COMPLETED:
+        goto_hw_list_page()
+        print("<error> homework item is not completed; returning empty list")
+        return []
+
+    goto_hw_completed_page(index, record)
+
+    elements = globalvars.driver.find_elements(By.CSS_SELECTOR, ANSWER_ROWS_SELECTOR)
+    if len(elements) <= 0:
+        goto_hw_list_page()
+        print("<warning> no answers are found; returning empty list")
+        return []
+
+    answers_list = []
+    for index, element in enumerate(elements):
+        element = element.find_element(By.CSS_SELECTOR, ANSWER_TEXT_SELECTOR)
+
+        answer_type = "unknown"
+        answer_text = element.text
+
+        # FIXME: cannot identify fill-in-blanks questions that require entering letters
+        # NOTE: the questions' types might change
+        if len(answer_text) >= 2:
+            answer_type = "fill-in-blanks"
+        elif len(answer_text) <= 0:
+            print("<warning> answer is blank")
+        elif "A" <= answer_text.upper() <= "D":
+            answer_type = "choice|fill-in-blanks"
+        elif "E" <= answer_text <= "Z":
+            answer_type = "fill-in-blanks"
+        else:
+            print("<warning> ???")
+
+        answers_list.append(
+            {"index": index + 1, "type": answer_type, "content": answer_text}
+        )
+
+    goto_hw_list_page()
+    return answers_list
+
+
 def generate_answers(
     index: int, record: HomeworkRecord, client: AIClient
 ) -> dict | None:
-    print(f"--- step: generate answers for index {index} ---")
+    print(f"--- step: generate answers for index {index}: {record.title} ---")
 
-    goto_hw_details_page(index, record)
+    goto_hw_original_page(index, record)
 
     has_audio = globalvars.driver.safe_find_element(By.TAG_NAME, "audio") is not None
     transcription_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3.txt"

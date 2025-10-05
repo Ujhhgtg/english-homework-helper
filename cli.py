@@ -208,15 +208,35 @@ def main():
                                     f"<error> invalid answers format: '{answers_input}'"
                                 )
                                 continue
-                            fill_answers(index, hw_list[index], answers)
+                            fill_in_answers(index, hw_list[index], answers)
+
                         case "download":
-                            raise NotImplementedError()
+                            answers = get_answers(index, hw_list[index])
+                            if len(answers) == 0:
+                                print(
+                                    "<error> no answers retrieved; cannot save to file"
+                                )
+                                continue
+
+                            answers_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_answers.json"
+                            with open(answers_file, "wt", encoding="utf-8") as f:
+                                f.write(
+                                    json.dumps(answers, indent=4, ensure_ascii=False)
+                                )
+                            print(f"<success> saved to file {answers_file}")
+
                         case "generate":
                             if ai_client is None:
                                 print("<error> no ai client selected")
                                 continue
                             answers = generate_answers(index, hw_list[index], ai_client)
-                            print(answers)
+
+                            answers_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_answers_gen.json"
+                            with open(answers_file, "wt", encoding="utf-8") as f:
+                                f.write(
+                                    json.dumps(answers, indent=4, ensure_ascii=False)
+                                )
+                            print(f"<success> saved to file {answers_file}")
 
                         case _:
                             print("<error> argument invalid")
@@ -292,7 +312,9 @@ def main():
                                 continue
 
                             globalvars.config.credentials.default = cred_choice
-                            cred = globalvars.config.credentials.all[cred_choice]
+                            cred = Credentials.from_dict(
+                                globalvars.config.credentials.all[cred_choice]
+                            )
                             print(
                                 f"<info> selected default credentials: {cred.describe()}"
                             )
@@ -313,7 +335,12 @@ def main():
                                         c[0],
                                         c[1].describe(),
                                     ),
-                                    enumerate(globalvars.config.ai_client.all),
+                                    enumerate(
+                                        map(
+                                            lambda c: AIClient.from_dict(c),
+                                            globalvars.config.ai_client.all,
+                                        )
+                                    ),
                                 )  # type: ignore
                             )
                             default = "none"
@@ -369,7 +396,12 @@ def main():
 
         except KeyboardInterrupt:
             print("<warning> interrupted")
-            continue
+
+        # except Exception as e:
+        #     print(
+        #         f"<error> unexpected error during task execution: {e}; trying to recover..."
+        #     )
+        #     goto_hw_list_page()
 
 
 if __name__ == "__main__":

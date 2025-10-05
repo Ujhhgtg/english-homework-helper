@@ -8,5 +8,5 @@ def load_config(path: str = "local/config.json") -> Munch:
 
 
 def save_config(config: Munch, path: str = "local/config.json") -> None:
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "wt", encoding="utf-8") as f:
         f.write(json.dumps(config, indent=4, ensure_ascii=False))

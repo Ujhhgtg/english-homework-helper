@@ -43,6 +43,7 @@ VIEW_ORIGINAL_BUTTON_SELECTOR = (
     "td:nth-child(12) > div:nth-child(1) > div:nth-child(1) > button:nth-child(2)"
 )
 NEXT_PAGE_BUTTON_SELECTOR = ".btn-next"
+TOAST_SELECTOR = ".el-message"
 
 PAPER_SELECTOR = ".el-dialog__body"
 ANSWER_ROWS_SELECTOR = ".el-table--scrollable-y > div:nth-child(3) > table:nth-child(1) > tbody:nth-child(2) > tr"

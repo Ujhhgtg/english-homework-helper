@@ -1,5 +1,4 @@
 import whisper
-from prompt_toolkit import PromptSession
 from selenium.webdriver.support.ui import WebDriverWait
 from munch import Munch
 

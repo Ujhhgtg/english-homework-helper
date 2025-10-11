@@ -2,8 +2,6 @@ from enum import Enum
 
 
 class HomeworkStatus(Enum):
-    """Defines the possible homework statuses using their Chinese text values."""
-
     COMPLETED = "已完成"
     IN_PROGRESS = "进行中"
     NOT_COMPLETED = "去完成"

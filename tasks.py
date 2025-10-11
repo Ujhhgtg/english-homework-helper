@@ -1,7 +1,9 @@
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
 import json
 import urllib.request
 import openai
@@ -49,7 +51,7 @@ def goto_hw_list_page():
     print(f"<info> navigated to: {URL_HOMEWORK_LIST}")
 
 
-def goto_hw_original_page(index: int, record: HomeworkRecord):
+def goto_hw_original_page(index: int, record: HomeworkRecord) -> bool:
     row_selector_nth = f"{HOMEWORK_TABLE_SELECTOR}:nth-child({index + 1})"
     if (
         record.status == HomeworkStatus.NOT_COMPLETED
@@ -61,10 +63,24 @@ def goto_hw_original_page(index: int, record: HomeworkRecord):
         button_selector = f"{row_selector_nth} > {VIEW_ORIGINAL_BUTTON_SELECTOR}"
     else:
         print(f"<error> unsupported homework status: {record.status}")
-        return
+        return False
 
     globalvars.driver.find_element(By.CSS_SELECTOR, button_selector).click()
+
+    toast_wait = WebDriverWait(globalvars.driver, 1.5)
+    try:
+        toast_elem = toast_wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, TOAST_SELECTOR))
+        )
+        toast_text = toast_elem.text
+        print(f"<error> website sends toast message: {toast_text}")
+        return False
+
+    except TimeoutException:
+        ...
+
     print("<info> opened hw original page")
+    return True
 
 
 def goto_hw_completed_page(index: int, record: HomeworkRecord):
@@ -183,9 +199,14 @@ def download_audio(index: int, record: HomeworkRecord):
     print(f"--- step: download audio of index {index} ---")
 
     try:
-        goto_hw_original_page(index, record)
+        if not goto_hw_original_page(index, record):
+            print("<error> failed to navigate to hw original page; aborting...")
+            return
 
-        audio_element = globalvars.driver.safe_find_element(By.TAG_NAME, "audio")
+        audio_element = globalvars.wait.until(
+            EC.presence_of_element_located((By.TAG_NAME, "audio"))
+        )
+        # audio_element = globalvars.driver.safe_find_element(By.TAG_NAME, "audio")
         if audio_element is None:
             print(f"<error> audio element not found")
             goto_hw_list_page()
@@ -291,7 +312,9 @@ def transcribe_audio(index: int, record: HomeworkRecord):
 def get_text(index: int, record: HomeworkRecord) -> str | None:
     print(f"--- step: retreive text content of index {index} ---")
 
-    goto_hw_original_page(index, record)
+    if not goto_hw_original_page(index, record):
+        print("<error> failed to navigate to hw original page; aborting...")
+        return None
 
     print(f"<info> scraping text content using selector: {PAPER_SELECTOR}")
     paper_element = globalvars.wait.until(
@@ -324,7 +347,9 @@ def download_text(index: int, record: HomeworkRecord):
 def fill_in_answers(index: int, record: HomeworkRecord, answers: list[str]) -> None:
     print(f"--- step: fill in answers for index {index} ---")
 
-    goto_hw_original_page(index, record)
+    if not goto_hw_original_page(index, record):
+        print("<error> failed to navigate to hw original page; aborting...")
+        return
 
     quiz_container_id = "content1"
 
@@ -415,9 +440,18 @@ def generate_answers(
 ) -> dict | None:
     print(f"--- step: generate answers for index {index}: {record.title} ---")
 
-    goto_hw_original_page(index, record)
+    if not goto_hw_original_page(index, record):
+        print("<error> failed to navigate to hw original page; aborting...")
+        return None
 
-    has_audio = globalvars.driver.safe_find_element(By.TAG_NAME, "audio") is not None
+    audio_wait = WebDriverWait(globalvars.driver, 1.5)
+    try:
+        audio_wait.until(EC.presence_of_element_located((By.TAG_NAME, "audio")))
+        has_audio = True
+    except TimeoutException:
+        has_audio = False
+
+    # has_audio = globalvars.driver.safe_find_element(By.TAG_NAME, "audio") is not None
     transcription_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
     if has_audio:
         if not Path(transcription_file).is_file():
@@ -426,7 +460,7 @@ def generate_answers(
             )
             return None
     else:
-        print("<warning> homework item seems not to have listening part; skipping that")
+        print("<info> homework item seems not to have listening part; skipping that")
 
     text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
     if not Path(text_file).is_file():

@@ -90,11 +90,9 @@ COMPLETION_WORD_MAP = {
         "account",
         "select_default",
     ): [],
-    ("ai",): ["select_api"],
-    (
-        "ai",
-        "select_api",
-    ): [],
+    ("ai",): ["select_api", "select_model"],
+    ("ai", "select_api"): [],
+    ("ai", "select_model"): [],
     ("config",): ["reload", "save"],
     (
         "config",
@@ -135,7 +133,7 @@ Output format (index starts at 1):
 
 Output requirements:
 1. NO MARKDOWN, NO COMMENTS, ONLY PURE JSON
-2. For the vocabulary part that lets you fill words into the blanks inside a whole passage: (1) treat them as "fill-in-blanks" questions, but fill in the letters that represents the words instead of the words themselves. (2) you must not use words repeatedly. one word can be used only 0~1 times.
+2. For the groups of questions that lets you fill words/sentences into the blanks inside a whole passage: (1) treat them as "fill-in-blanks" questions, but fill in the letters that represents the words instead of the words themselves. (2) you must not use words/sentences repeatedly. one word/sentence can be used only 0~1 times.
 3. There are only two types: "choice" and "fill-in-blanks". Treat translations as "fill-in-blanks" questions.
 """
 

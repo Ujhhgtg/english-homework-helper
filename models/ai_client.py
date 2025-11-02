@@ -4,21 +4,33 @@ from munch import Munch
 from utils.convert import mask_string_middle
 
 
+# TODO: add multiple types of AIClient: ollama, openai
 class AIClient:
+    type: str
     api_url: str
     api_key: str
-    model: str
+    models: list[str]
+    selected_model_index: int
     client: OpenAI
 
-    def __init__(self, api_url: str, api_key: str, model: str):
+    def __init__(
+        self, type: str, api_url: str, api_key: str, models: list[str], sel_model: int
+    ):
+        self.type = type
         self.api_url = api_url
         self.api_key = api_key
-        self.model = model
+        self.models = models
+        self.selected_model_index = sel_model
         self.client = OpenAI(api_key=self.api_key, base_url=self.api_url)
 
     @classmethod
     def from_dict(cls, data: Munch):
-        return cls(data.api_url, data.api_key, data.model)
+        return cls(
+            data.type, data.api_url, data.api_key, data.model.all, data.model.selected
+        )
 
     def describe(self) -> str:
-        return f"{self.api_url} / {mask_string_middle(self.api_key)} / {self.model}"
+        return f"{self.type}: {self.api_url} / {mask_string_middle(self.api_key)} / {self.models}"
+
+    def selected_model(self) -> str:
+        return self.models[self.selected_model_index]

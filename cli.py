@@ -66,35 +66,32 @@ def main():
     )
 
     ai_client: AIClient | None = None
-    if globalvars.config.ai_client.default is not None:
-        default_index = globalvars.config.ai_client.default
-        if 0 <= default_index < len(globalvars.config.ai_client.all):
-            ai_client_conf = globalvars.config.ai_client.all[default_index]
-            ai_client = AIClient.from_dict(ai_client_conf)
-            print(f"<info> using default AI client at index {default_index}")
+    if globalvars.config.ai_client.selected is not None:
+        sel_index = globalvars.config.ai_client.selected
+        if 0 <= sel_index < len(globalvars.config.ai_client.all):
+            ai_client = AIClient.from_dict(globalvars.config.ai_client.all[sel_index])
+            print(f"<info> using default AI client at index {sel_index}")
         else:
             print(
-                f"<warning> default AI client index {default_index} out of range; falling back to no AI client"
+                f"<warning> default AI client index {sel_index} out of range; falling back to no AI client"
             )
 
     hw_list: list[HomeworkRecord] = []
     session: PromptSession = PromptSession()
 
-    if globalvars.config.credentials.default is not None:
-        default_index = globalvars.config.credentials.default
-        if 0 <= default_index < len(globalvars.config.credentials.all):
-            cred = Credentials.from_dict(
-                globalvars.config.credentials.all[default_index]
-            )
+    if globalvars.config.credentials.selected is not None:
+        sel_index = globalvars.config.credentials.selected
+        if 0 <= sel_index < len(globalvars.config.credentials.all):
+            cred = Credentials.from_dict(globalvars.config.credentials.all[sel_index])
             login(cred)
             goto_hw_list_page()
             hw_list = get_list()
             print(
-                f"<info> using default credentials at index {default_index}: {cred.describe()}"
+                f"<info> using default credentials at index {sel_index}: {cred.describe()}"
             )
         else:
             print(
-                f"<warning> default credentials index {default_index} out of range; not logging in"
+                f"<warning> default credentials index {sel_index} out of range; not logging in"
             )
     else:
         print(f"<warning> no default credentials provided; not logging in")
@@ -195,19 +192,8 @@ def main():
 
                     match input_parts[1]:
                         case "fill_in":
-                            answers_input = (
-                                session.prompt("answers (e.g. A B C D A): ")
-                                .strip()
-                                .upper()
-                            )
-                            answers = answers_input.split()
-                            if not answers or any(
-                                a not in ["A", "B", "C", "D"] for a in answers
-                            ):
-                                print(
-                                    f"<error> invalid answers format: '{answers_input}'"
-                                )
-                                continue
+                            answers_input = session.prompt("answers: ").strip()
+                            answers = json.loads(answers_input)
                             fill_in_answers(index, hw_list[index], answers)
 
                         case "download":
@@ -230,6 +216,9 @@ def main():
                                 print("<error> no ai client selected")
                                 continue
                             answers = generate_answers(index, hw_list[index], ai_client)
+                            if answers is None:
+                                print("<error> failed to generate answers")
+                                continue
 
                             answers_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_answers_gen.json"
                             with open(answers_file, "wt", encoding="utf-8") as f:
@@ -263,8 +252,8 @@ def main():
                                 )
                             )  # type: ignore
                             default = 0
-                            if isinstance(globalvars.config.credentials.default, int):
-                                default = globalvars.config.credentials.default
+                            if isinstance(globalvars.config.credentials.selected, int):
+                                default = globalvars.config.credentials.selected
                             cred_choice = choice(
                                 "select credentials to use:",
                                 options=options,
@@ -299,19 +288,19 @@ def main():
                                 )  # type: ignore
                             )
                             default = "none"
-                            if isinstance(globalvars.config.credentials.default, int):
-                                default = globalvars.config.credentials.default
+                            if isinstance(globalvars.config.credentials.selected, int):
+                                default = globalvars.config.credentials.selected
                             cred_choice = choice(
                                 "select default credentials to use:",
                                 options=options,
                                 default=default,
                             )
                             if cred_choice == "none":
-                                globalvars.config.credentials.default = None
+                                globalvars.config.credentials.selected = None
                                 print("<info> disabled auto login")
                                 continue
 
-                            globalvars.config.credentials.default = cred_choice
+                            globalvars.config.credentials.selected = cred_choice
                             cred = Credentials.from_dict(
                                 globalvars.config.credentials.all[cred_choice]
                             )
@@ -344,25 +333,48 @@ def main():
                                 )  # type: ignore
                             )
                             default = "none"
-                            if isinstance(globalvars.config.ai_client.default, int):
-                                default = globalvars.config.ai_client.default
-                            cred_choice = choice(
+                            if isinstance(globalvars.config.ai_client.selected, int):
+                                default = globalvars.config.ai_client.selected
+                            client_choice = choice(
                                 "select AI client to use:",
                                 options=options,
                                 default=default,
                             )
-                            if cred_choice == "none":
+                            if client_choice == "none":
                                 ai_client = None
-                                globalvars.config.ai_client.default = None
+                                globalvars.config.ai_client.selected = None
                                 print("<info> AI features disabled")
                                 continue
 
                             ai_client_conf = globalvars.config.ai_client.all[
-                                cred_choice
+                                client_choice
                             ]
                             ai_client = AIClient.from_dict(ai_client_conf)
-                            globalvars.config.ai_client.default = cred_choice
+                            globalvars.config.ai_client.selected = client_choice
                             print(f"<info> selected AI client: {ai_client.describe()}")
+                        case "select_model":
+                            if ai_client is None:
+                                print("<error> no ai client selected")
+                                continue
+
+                            options = list(enumerate(ai_client.models))
+                            model_choice = choice(
+                                "select AI model to use:",
+                                options=options,
+                                default=ai_client.selected_model_index,
+                            )
+
+                            ai_client_conf = next(
+                                c
+                                for c in globalvars.config.ai_client.all
+                                if c.api_url == ai_client.api_url
+                                and c.api_key == ai_client.api_key
+                            )
+                            ai_client_conf.model.selected = model_choice
+                            ai_client.selected_model_index = model_choice
+                            print(
+                                f"<info> selected AI model: {ai_client.selected_model()}"
+                            )
                         case _:
                             print("<error> argument invalid")
 

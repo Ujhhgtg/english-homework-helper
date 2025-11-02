@@ -203,11 +203,15 @@ def download_audio(index: int, record: HomeworkRecord):
             print("<error> failed to navigate to hw original page; aborting...")
             return
 
-        audio_element = globalvars.wait.until(
-            EC.presence_of_element_located((By.TAG_NAME, "audio"))
+        globalvars.wait.until(
+            EC.presence_of_element_located((By.CLASS_NAME, "el-dialog__body"))
         )
-        # audio_element = globalvars.driver.safe_find_element(By.TAG_NAME, "audio")
-        if audio_element is None:
+
+        # audio_element = globalvars.wait.until(
+        #     EC.presence_of_element_located((By.TAG_NAME, "audio"))
+        # )
+        audio_element = globalvars.driver.safe_find_element(By.TAG_NAME, "audio")
+        if not audio_element:
             print(f"<error> audio element not found")
             goto_hw_list_page()
             return
@@ -344,51 +348,98 @@ def download_text(index: int, record: HomeworkRecord):
 
 
 # TODO: fill-in-the-blanks questions
-def fill_in_answers(index: int, record: HomeworkRecord, answers: list[str]) -> None:
+def fill_in_answers(index: int, record: HomeworkRecord, answers: dict) -> None:
     print(f"--- step: fill in answers for index {index} ---")
 
     if not goto_hw_original_page(index, record):
         print("<error> failed to navigate to hw original page; aborting...")
         return
 
-    quiz_container_id = "content1"
+    quiz_container_id = "taskContent"
 
-    question_inputs = globalvars.driver.find_elements(
-        By.XPATH,
-        f"//div[@id='{quiz_container_id}']//input[@type='radio' and contains(@class, 'pjAnswer')]",
+    interactive_elements_xpath = (
+        f"//div[@id='{quiz_container_id}']//input[@type='radio' or @type='text']"
     )
 
-    question_names = [
-        input_element.get_attribute("name") for input_element in question_inputs
-    ]
+    all_inputs = globalvars.driver.find_elements(By.XPATH, interactive_elements_xpath)
 
-    print(f"<info> found {len(question_names)} questions")
+    questions = {}
 
-    if len(answers) < len(question_names):
+    for element in all_inputs:
+        input_type = element.get_attribute("type")
+        q_id = element.get_attribute("name")
+
+        if input_type == "radio":
+            if q_id and q_id not in questions:
+                questions[q_id] = {"type": "radio", "name": q_id}
+
+        elif input_type == "text":
+            if q_id and q_id not in questions:
+                questions[q_id] = {"type": "text", "element": element}
+
+    ordered_q_ids = list(questions.keys())
+
+    print(f"<info> found {len(ordered_q_ids)} questions to answer")
+
+    if len(answers) < len(ordered_q_ids):
         print(
-            f"<warning> only {len(answers)} answers provided for {len(question_names)} questions"
+            f"<warning> only {len(answers)} answers provided for {len(ordered_q_ids)} questions"
         )
-        question_names = question_names[: len(answers)]
+        ordered_q_ids = ordered_q_ids[: len(answers)]
 
-    for q_num, (name, answer_letter) in enumerate(zip(question_names, answers), 1):
-        print(q_num, name, answer_letter)
+    for q_num, (q_id, answer) in enumerate(zip(ordered_q_ids, answers), 1):
 
-        xpath = (
-            f"//div[@id='{quiz_container_id}']"
-            f"//input[@type='radio' and @name='{name}' and @value='{answer_letter}']"
-        )
+        question_info = questions[q_id]
 
         try:
             time.sleep(0.5)
-            globalvars.wait.until(EC.element_to_be_clickable((By.XPATH, xpath))).click()
-            print(f"<success> ✅ question {q_num}: selected option {answer_letter}")
+            answer_types = answer["type"].split("|")
+
+            if question_info["type"] == "radio":
+                if "choice" not in answer_types:
+                    print(
+                        f"<error> question type and answer type mismatch for question {q_id}; aborting..."
+                    )
+                    return
+
+                answer_letter = answer["content"]
+
+                xpath = (
+                    f"//div[@id='{quiz_container_id}']"
+                    f"//input[@type='radio' and @name='{q_id}' and @value='{answer_letter}']"
+                )
+
+                globalvars.wait.until(
+                    EC.element_to_be_clickable((By.XPATH, xpath))
+                ).click()
+                print(
+                    f"<success> ✅ question {q_num} (choice): selected option {answer_letter}"
+                )
+
+            elif question_info["type"] == "text":
+                if "fill-in-blanks" not in answer_types:
+                    print(
+                        f"<error> question type and answer type mismatch for question {q_id}; aborting..."
+                    )
+                    return
+
+                answer_text = answer["content"]
+
+                text_input_element = question_info["element"]
+
+                text_input_element.clear()
+                text_input_element.send_keys(answer_text)
+
+                print(
+                    f"<success> ✅ question {q_num} (FIB): filled text '{answer_text}'"
+                )
 
         except Exception as e:
             print(
-                f"<error> ❌ could not select answer {answer_letter} for question {q_num}: {e}"
+                f"<error> ❌ could not set answer '{answer}' for question {q_num} ({question_info['type']}): {e}"
             )
 
-    print("<info> all answers filled in; please review and submit manually")
+    print("\n<info> all answers filled in; please review and submit manually")
 
 
 def get_answers(index: int, record: HomeworkRecord) -> list[dict]:
@@ -422,7 +473,7 @@ def get_answers(index: int, record: HomeworkRecord) -> list[dict]:
             print("<warning> answer is blank")
         elif "A" <= answer_text.upper() <= "D":
             answer_type = "choice|fill-in-blanks"
-        elif "E" <= answer_text <= "Z":
+        elif "E" <= answer_text.upper() <= "Z":
             answer_type = "fill-in-blanks"
         else:
             print("<warning> ???")
@@ -480,7 +531,7 @@ def generate_answers(
     print("<info> requesting model for a response (this may take a while)...")
     try:
         response = client.client.chat.completions.create(
-            model=client.model,
+            model=client.selected_model(),
             messages=[
                 {
                     "role": "system",
@@ -504,13 +555,33 @@ def generate_answers(
         print("<error> model returned null")
         goto_hw_list_page()
         return None
-    print(f"<success> model result is valid")
     goto_hw_list_page()
 
     try:
-        return json.loads(raw_data)
-    except json.JSONDecodeError as e:
-        print(f"<error> critical error during json decode of model result: {e}")
+        answers = json.loads(raw_data)
+        print(
+            f"<success> model result is valid; totalling {len(raw_data)} chars in length"
+        )
+
+        print("<info> post-processing model result...")
+        post_process_count = 0
+        for answer in answers:
+            if len(answer["content"]) >= 2:
+                if answer["type"] != "fill-in-blanks":
+                    post_process_count += 1
+                    answer["type"] = "fill-in-blanks"
+            elif "A" <= answer["content"].upper() <= "D":
+                post_process_count += 1
+                answer["type"] = "choice|fill-in-blanks"
+            elif "E" <= answer["content"].upper() <= "Z":
+                post_process_count += 1
+                answer["type"] = "fill-in-blanks"
+
+        print(f"<info> post-processed model result for {post_process_count} times")
+        return answers
+
+    except json.JSONDecodeError:
+        print(f"<error> model result is not valid json")
         return None
 
 

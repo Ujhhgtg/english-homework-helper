@@ -18,7 +18,13 @@
             {
                 "api_url": "api_url",
                 "api_key": "api_key",
-                "model": "model_name"
+                "model": {
+                    "selected": 0,
+                    "all": [
+                        "model1",
+                        "model2"
+                    ]
+                }
             }
         ]
     },

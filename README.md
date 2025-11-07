@@ -118,7 +118,12 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
                 {
                     "api_url": "http://localhost:11434/v1/",
                     "api_key": "ollama",
-                    "model": "model-name"
+                    "model": [
+                        "selected": 0,
+                        "all": [
+                            "model1", "model2"
+                        ]
+                    ]
                 }
             ]
         },
@@ -131,7 +136,7 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
 Run the main script:
 
 ```bash
-python main.py
+python console.py
 ```
 
 ## 🤝 Contributing

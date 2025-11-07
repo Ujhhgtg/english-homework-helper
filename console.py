@@ -22,14 +22,10 @@ from utils.convert import parse_int
 from utils.crypto import encodeb64_safe
 from utils.prompt import LastWordCompleter
 from utils.config import load_config, save_config
+from utils.context.context import Context
+from utils.context.messenger import ConsoleMessenger
 from tasks import *
 import globalvars
-
-# driver: FirefoxDriver = None  # type: ignore
-# wait: WebDriverWait = None  # type: ignore
-# whisper_model: whisper.model.Whisper | None = None
-# config: Munch = None  # type: ignore
-# session: PromptSession = PromptSession()
 
 
 def _at_exit():
@@ -44,6 +40,8 @@ def _at_exit():
 
 
 def main():
+    globalvars.context = Context(messenger=ConsoleMessenger())
+
     print("--- english homework helper ---")
     print("--- by: ujhhgtg ---")
     print("--- github: https://github.com/Ujhhgtg/english-homework-helper ---")

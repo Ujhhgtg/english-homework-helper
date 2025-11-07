@@ -1,4 +1,4 @@
-from models.context.messenger import Messenger
+from utils.context.messenger import Messenger
 
 
 class Context:

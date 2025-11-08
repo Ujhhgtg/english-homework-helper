@@ -18,6 +18,7 @@
         "default": 0,
         "all": [
             {
+                "type": "openai",
                 "api_url": "api_url",
                 "api_key": "api_key",
                 "model": {

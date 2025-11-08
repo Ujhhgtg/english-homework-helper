@@ -5,39 +5,32 @@ import atexit
 import json
 import shlex
 from pathlib import Path
-
-from selenium.webdriver.firefox.options import (
-    Options as FirefoxOptions,
-)
 from selenium.webdriver.support.ui import WebDriverWait
-
 from textual.app import App, ComposeResult
 from textual.widgets import (
     Header,
     Footer,
     Input,
-    Log,
+    RichLog,
     ListView,
     ListItem,
     Label,
-    Static,
 )
-from textual.containers import Container, Vertical
+from textual.containers import Container
 from textual.binding import Binding
-from textual.message import Message
+from textual import work
 
 from models.homework_record import HomeworkRecord
 from models.ai_client import AIClient
 from models.credentials import Credentials
-from utils.webdriver import FirefoxDriver
 from utils.convert import parse_int
 from utils.crypto import encodeb64_safe
 from utils.config import load_config, save_config
 from utils.logging import print
 from utils.context.context import Context
 from utils.context.messenger import TextualMessenger
-from tasks import *  # login, goto_hw_list_page, get_list, download_audio, transcribe_audio, get_text, download_text, get_answers, generate_answers, fill_in_answers, logout
-import globalvars  # Assuming this module still manages global state like driver, wait, config
+from tasks import *
+import globalvars
 
 
 class HomeworkRecordItem(ListItem):
@@ -49,17 +42,14 @@ class HomeworkRecordItem(ListItem):
         self.index = index
 
     def compose(self) -> ComposeResult:
-        # Display the index and the homework title
         yield Label(f"[{self.index}] {self.record.title}", classes="list-label")
 
 
 class HomeworkApp(App):
-    """The main Textual application for the English Homework Helper."""
-
     CSS = """
     #app-grid {
-        grid-size: 3 1; /* Three columns: List, Main, Command */
-        grid-columns: 1fr 3fr; /* Sidebar for list, main area */
+        grid-size: 3 1;
+        grid-columns: 1fr 3fr;
     }
     #hw-list {
         dock: left;
@@ -81,7 +71,7 @@ class HomeworkApp(App):
     }
     .list-label {
         width: 100%;
-        overflow: ellipsis;
+        overflow: auto;
     }
     """
 
@@ -103,36 +93,73 @@ class HomeworkApp(App):
         yield ListView(id="hw-list", classes="box")
 
         with Container(id="main-area"):
-            yield Log(id="output-log", classes="box")
+            yield RichLog(id="output-log", classes="box", markup=True)
             yield Input(
                 placeholder="Enter command (e.g., list, help, exit)", id="command-input"
             )
 
-    def on_mount(self) -> None:
+    @work
+    async def _initialize_app(self) -> None:
         print("--- english homework helper ---")
         print("--- by: ujhhgtg ---")
         print("--- github: https://github.com/Ujhhgtg/english-homework-helper ---")
         print("--- step: initialize ---")
 
         atexit.register(self._at_exit)
-        print("[i] registered atexit handler")
+        print("<info> registered atexit handler")
         Path("./cache/").mkdir(parents=True, exist_ok=True)
-        print("[i] created cache directory")
+        print("<info> created cache directory")
         globalvars.config = load_config()
-        print("[i] loaded config file")
-
-        driver_options = FirefoxOptions()
+        print("<info> loaded config file")
+        match globalvars.config.browser.type:
+            case "chrome":
+                from selenium.webdriver.chrome.options import (
+                    Options as WebDriverOptions,
+                )
+                from selenium.webdriver.chrome.webdriver import (
+                    WebDriver,
+                )
+            case "firefox":
+                from selenium.webdriver.firefox.options import (
+                    Options as WebDriverOptions,
+                )
+                from selenium.webdriver.firefox.webdriver import (
+                    WebDriver,
+                )
+            case "edge":
+                from selenium.webdriver.edge.options import (
+                    Options as WebDriverOptions,
+                )
+                from selenium.webdriver.edge.webdriver import (
+                    WebDriver,
+                )
+            case "safari":
+                from selenium.webdriver.safari.options import (
+                    Options as WebDriverOptions,
+                )
+                from selenium.webdriver.safari.webdriver import (
+                    WebDriver,
+                )
+            case _:
+                print(
+                    f"<error> unsupported browser type: {globalvars.config.browser.type}; aborting..."
+                )
+                return
+        driver_options = WebDriverOptions()
+        if globalvars.config.browser.type != "safari":
+            driver_options.binary_location = globalvars.config.browser.binary_path  # type: ignore
+        else:
+            if globalvars.config.browser.binary_path != "":
+                print(
+                    "<warning> safari browser binary path is ignored; using system default"
+                )
         if globalvars.config.browser.headless:
             driver_options.add_argument("--headless")
-
-        try:
-            globalvars.driver = FirefoxDriver(options=driver_options)
-            globalvars.wait = WebDriverWait(globalvars.driver, 15)
-            print(
-                f"[i] started browser{' in headless mode' if globalvars.config.browser.headless else ''}"
-            )
-        except Exception as e:
-            print(f"[error] failed to start browser: {e}")
+        globalvars.driver = WebDriver(options=driver_options)  # type: ignore
+        globalvars.wait = WebDriverWait(globalvars.driver, 15)
+        print(
+            f"<info> started browser {globalvars.config.browser.type} {" in headless mode" if globalvars.config.browser.headless else ""}"
+        )
 
         if globalvars.config.ai_client.selected is not None:
             sel_index = globalvars.config.ai_client.selected
@@ -140,10 +167,10 @@ class HomeworkApp(App):
                 self.ai_client = AIClient.from_dict(
                     globalvars.config.ai_client.all[sel_index]
                 )
-                print(f"[i] using default AI client at index {sel_index}")
+                print(f"<info> using default AI client at index {sel_index}")
             else:
                 print(
-                    f"[warning] default AI client index {sel_index} out of range; falling back to no AI client"
+                    f"<warning> default AI client index {sel_index} out of range; falling back to no AI client"
                 )
 
         if globalvars.config.credentials.selected is not None:
@@ -158,30 +185,32 @@ class HomeworkApp(App):
                     self.hw_list = get_list()
                     self._update_homework_list_view()
                     print(
-                        f"[i] using default credentials at index {sel_index}: {cred.describe()}"
+                        f"<info> using default credentials at index {sel_index}: {cred.describe()}"
                     )
                 except Exception as e:
-                    print(f"[error] automatic login failed: {e}")
+                    print(f"<error> automatic login failed: {e}")
             else:
                 print(
-                    f"[warning] default credentials index {sel_index} out of range; not logging in"
+                    f"<warning> default credentials index {sel_index} out of range; not logging in"
                 )
         else:
-            print(f"[warning] no default credentials provided; not logging in")
+            print(f"<warning> no default credentials provided; not logging in")
 
         print("--- entering interactive mode ---")
         self.query_one("#command-input").focus()
 
+    def on_mount(self) -> None:
+        self._initialize_app()
+
     def _at_exit(self):
         if globalvars.driver is not None:
             try:
-                globalvars.driver.current_url
                 globalvars.driver.quit()
-                print("[i] atexit: browser closed automatically")
+                print("<info> atexit: browser closed automatically")
                 save_config(globalvars.config)
-                print("[i] saved config to file")
+                print("<info> saved config to file")
             except Exception as e:
-                print(f"[error] error occured at exit: {e}")
+                print(f"<error> error occured at exit: {e}")
 
     def _update_homework_list_view(self) -> None:
         hw_list_view = self.query_one("#hw-list", ListView)
@@ -191,7 +220,7 @@ class HomeworkApp(App):
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
         user_input = message.value.strip().lower()
-        self.query_one(Input).value = ""  # Clear the input box
+        self.query_one(Input).value = ""
         if not user_input:
             return
 
@@ -208,17 +237,17 @@ class HomeworkApp(App):
             self._execute_command(command, args)
 
         except Exception as e:
-            print(f"[error] an unexpected error occurred: {e}")
+            print(f"<error> an unexpected error occurred: {e}")
             try:
                 goto_hw_list_page()
             except Exception:
                 ...
 
-    def _execute_command(self, command: str, args: list[str]) -> None:
-
+    @work
+    async def _execute_command(self, command: str, args: list[str]) -> None:
         match command:
             case "help":
-                print("[i] available commands:")
+                print("<info> available commands:")
                 print("  audio [download|transcribe] <index>")
                 print("  text [display|download] <index>")
                 print("  answers [fill_in|download|generate] <index>")
@@ -231,18 +260,18 @@ class HomeworkApp(App):
             case "list":
                 self.hw_list = get_list()
                 self._update_homework_list_view()
-                print("[i] homework list updated.")
+                print("<info> homework list updated")
 
             case "audio":
                 if len(args) < 2:
                     print(
-                        "[error] argument not enough. Usage: audio [download|transcribe] <index>"
+                        "<error> argument not enough. Usage: audio [download|transcribe] <index>"
                     )
                     return
                 subcommand = args[0]
                 index = parse_int(args[1])
                 if index is None or not (0 <= index < len(self.hw_list)):
-                    print(f"[error] invalid or out of range index: {args[1]}")
+                    print(f"<error> invalid or out of range index: {args[1]}")
                     return
 
                 record = self.hw_list[index]
@@ -254,23 +283,23 @@ class HomeworkApp(App):
                     )
                     if not Path(audio_file).is_file():
                         print(
-                            f"[error] audio file for index {index} not found; please download it first"
+                            f"<error> audio file for index {index} not found; please download it first"
                         )
                         return
                     transcribe_audio(index, record)
                 else:
-                    print("[error] argument invalid")
+                    print("<error> argument invalid")
 
             case "text":
                 if len(args) < 2:
                     print(
-                        "[error] argument not enough. Usage: text [display|download] <index>"
+                        "<error> argument not enough. Usage: text [display|download] <index>"
                     )
                     return
                 subcommand = args[0]
                 index = parse_int(args[1])
                 if index is None or not (0 <= index < len(self.hw_list)):
-                    print(f"[error] invalid or out of range index: {args[1]}")
+                    print(f"<error> invalid or out of range index: {args[1]}")
                     return
 
                 record = self.hw_list[index]
@@ -279,29 +308,29 @@ class HomeworkApp(App):
                 elif subcommand == "download":
                     download_text(index, record)
                 else:
-                    print("[error] argument invalid")
+                    print("<error> argument invalid")
 
             case "answers":
                 if len(args) < 2:
                     print(
-                        "[error] argument not enough. Usage: answers [fill_in|download|generate] <index>"
+                        "<error> argument not enough. Usage: answers [fill_in|download|generate] <index>"
                     )
                     return
                 subcommand = args[0]
                 index = parse_int(args[1])
                 if index is None or not (0 <= index < len(self.hw_list)):
-                    print(f"[error] invalid or out of range index: {args[1]}")
+                    print(f"<error> invalid or out of range index: {args[1]}")
                     return
 
                 record = self.hw_list[index]
 
                 if subcommand == "fill_in":
                     print(
-                        "[warning] For 'fill_in', you need a separate command to submit JSON data. This feature requires a custom input screen in Textual."
+                        "<warning> For 'fill_in', you need a separate command to submit JSON data. This feature requires a custom input screen in Textual."
                     )
                     if len(args) < 3:
                         print(
-                            '[error] Not enough arguments for fill_in. Usage: answers fill_in <index> <\'{"key": "value"}\'>'
+                            '<error> Not enough arguments for fill_in. Usage: answers fill_in <index> <\'{"key": "value"}\'>'
                         )
                         return
 
@@ -311,14 +340,14 @@ class HomeworkApp(App):
                         fill_in_answers(index, record, answers)
                         print("[success] Answers filled in successfully.")
                     except json.JSONDecodeError:
-                        print("[error] Invalid JSON format for answers.")
+                        print("<error> Invalid JSON format for answers.")
                     except Exception as e:
-                        print(f"[error] Failed to fill in answers: {e}")
+                        print(f"<error> Failed to fill in answers: {e}")
 
                 elif subcommand == "download":
                     answers = get_answers(index, record)
                     if not answers:
-                        print("[error] no answers retrieved; cannot save to file")
+                        print("<error> no answers retrieved; cannot save to file")
                         return
 
                     answers_file = (
@@ -330,11 +359,11 @@ class HomeworkApp(App):
 
                 elif subcommand == "generate":
                     if self.ai_client is None:
-                        print("[error] no ai client selected")
+                        print("<error> no ai client selected")
                         return
                     answers = generate_answers(index, record, self.ai_client)
                     if answers is None:
-                        print("[error] failed to generate answers")
+                        print("<error> failed to generate answers")
                         return
 
                     answers_file = f"cache/homework_{encodeb64_safe(record.title)}_answers_gen.json"
@@ -343,22 +372,22 @@ class HomeworkApp(App):
                     print(f"[success] saved to file {answers_file}")
 
                 else:
-                    print("[error] argument invalid")
+                    print("<error> argument invalid")
 
             case "account":
                 if len(args) < 1:
                     print(
-                        "[error] argument not enough. Usage: account [login|logout|select_default]"
+                        "<error> argument not enough. Usage: account [login|logout|select_default]"
                     )
                     return
                 subcommand = args[0]
 
                 if subcommand == "login":
                     print(
-                        "[warning] 'account login' requires a selection. Please use 'account login <index>'"
+                        "<warning> 'account login' requires a selection. Please use 'account login <index>'"
                     )
                     if len(args) < 2:
-                        print("[error] Missing credentials index. Available accounts:")
+                        print("<error> Missing credentials index. Available accounts:")
                         for idx, cred_dict in enumerate(
                             globalvars.config.credentials.all
                         ):
@@ -370,7 +399,7 @@ class HomeworkApp(App):
                     try:
                         cred_choice = int(index_str)
                     except ValueError:
-                        print("[error] Invalid index.")
+                        print("<error> Invalid index.")
                         return
 
                     if 0 <= cred_choice < len(globalvars.config.credentials.all):
@@ -386,7 +415,7 @@ class HomeworkApp(App):
                             f"[success] Logged in with credentials: {cred.describe()}"
                         )
                     else:
-                        print("[error] Credentials index out of range.")
+                        print("<error> Credentials index out of range.")
                         return
 
                 elif subcommand == "logout":
@@ -395,11 +424,11 @@ class HomeworkApp(App):
 
                 elif subcommand == "select_default":
                     print(
-                        "[warning] 'select_default' requires an index or 'none'. Usage: account select_default <index|none>"
+                        "<warning> 'select_default' requires an index or 'none'. Usage: account select_default <index|none>"
                     )
                     if len(args) < 2:
                         print(
-                            "[error] Missing credentials index. Available accounts (use 'none' to disable auto-login):"
+                            "<error> Missing credentials index. Available accounts (use 'none' to disable auto-login):"
                         )
                         print("  [none] disable auto login")
                         for idx, cred_dict in enumerate(
@@ -412,12 +441,12 @@ class HomeworkApp(App):
                     choice_str = args[1].lower()
                     if choice_str == "none":
                         globalvars.config.credentials.selected = None
-                        print("[i] disabled auto login")
+                        print("<info> disabled auto login")
                     else:
                         try:
                             cred_choice = int(choice_str)
                         except ValueError:
-                            print("[error] Invalid index or command.")
+                            print("<error> Invalid index or command.")
                             return
 
                         if 0 <= cred_choice < len(globalvars.config.credentials.all):
@@ -426,28 +455,28 @@ class HomeworkApp(App):
                                 globalvars.config.credentials.all[cred_choice]
                             )
                             print(
-                                f"[i] selected default credentials: {cred.describe()}"
+                                f"<info> selected default credentials: {cred.describe()}"
                             )
                         else:
-                            print("[error] Credentials index out of range.")
+                            print("<error> Credentials index out of range.")
                 else:
-                    print("[error] argument invalid")
+                    print("<error> argument invalid")
 
             case "ai":
                 if len(args) < 1:
                     print(
-                        "[error] argument not enough. Usage: ai [select_api|select_model]"
+                        "<error> argument not enough. Usage: ai [select_api|select_model]"
                     )
                     return
                 subcommand = args[0]
 
                 if subcommand == "select_api":
                     print(
-                        "[warning] 'select_api' requires an index or 'none'. Usage: ai select_api <index|none>"
+                        "<warning> 'select_api' requires an index or 'none'. Usage: ai select_api <index|none>"
                     )
                     if len(args) < 2:
                         print(
-                            "[error] Missing AI client index. Available clients (use 'none' to disable AI):"
+                            "<error> Missing AI client index. Available clients (use 'none' to disable AI):"
                         )
                         print("  [none] disable AI features")
                         for idx, client_dict in enumerate(
@@ -461,12 +490,12 @@ class HomeworkApp(App):
                     if choice_str == "none":
                         self.ai_client = None
                         globalvars.config.ai_client.selected = None
-                        print("[i] AI features disabled")
+                        print("<info> AI features disabled")
                     else:
                         try:
                             client_choice = int(choice_str)
                         except ValueError:
-                            print("[error] Invalid index or command.")
+                            print("<error> Invalid index or command.")
                             return
 
                         if 0 <= client_choice < len(globalvars.config.ai_client.all):
@@ -476,22 +505,22 @@ class HomeworkApp(App):
                             self.ai_client = AIClient.from_dict(ai_client_conf)
                             globalvars.config.ai_client.selected = client_choice
                             print(
-                                f"[i] selected AI client: {self.ai_client.describe()}"
+                                f"<info> selected AI client: {self.ai_client.describe()}"
                             )
                         else:
-                            print("[error] AI client index out of range.")
+                            print("<error> AI client index out of range.")
 
                 elif subcommand == "select_model":
                     if self.ai_client is None:
-                        print("[error] no ai client selected")
+                        print("<error> no ai client selected")
                         return
 
                     print(
-                        "[warning] 'select_model' requires an index. Usage: ai select_model <index>"
+                        "<warning> 'select_model' requires an index. Usage: ai select_model <index>"
                     )
                     if len(args) < 2:
                         print(
-                            f"[error] Missing model index. Available models for {self.ai_client.describe()}:"
+                            f"<error> Missing model index. Available models for {self.ai_client.describe()}:"
                         )
                         for idx, model_name in enumerate(self.ai_client.models):
                             print(
@@ -502,7 +531,7 @@ class HomeworkApp(App):
                     try:
                         model_choice = int(args[1])
                     except ValueError:
-                        print("[error] Invalid index.")
+                        print("<error> Invalid index.")
                         return
 
                     if 0 <= model_choice < len(self.ai_client.models):
@@ -515,46 +544,45 @@ class HomeworkApp(App):
                                 client_conf.model.selected = model_choice
                                 self.ai_client.selected_model_index = model_choice
                                 print(
-                                    f"[i] selected AI model: {self.ai_client.selected_model()}"
+                                    f"<info> selected AI model: {self.ai_client.selected_model()}"
                                 )
                                 break
                     else:
-                        print("[error] Model index out of range.")
+                        print("<error> Model index out of range.")
 
                 else:
-                    print("[error] argument invalid")
+                    print("<error> argument invalid")
 
             case "config":
                 if len(args) < 1:
-                    print("[error] argument not enough. Usage: config [reload|save]")
+                    print("<error> argument not enough. Usage: config [reload|save]")
                     return
                 subcommand = args[0]
                 if subcommand == "reload":
                     globalvars.config = load_config()
-                    print("[i] reloaded config file")
+                    print("<info> reloaded config file")
                     print(
-                        "[i] note: current states (browser, ai client) are not changed"
+                        "<info> note: current states (browser, ai client) are not changed"
                     )
                 elif subcommand == "save":
                     save_config(globalvars.config)
-                    print("[i] saved config to file")
+                    print("<info> saved config to file")
                 else:
-                    print("[error] argument invalid")
+                    print("<error> argument invalid")
 
             case "exit":
-                ...
+                self.exit()
 
             case _:
-                print(f"[error] unrecognized command: '{command}'")
+                print(f"<error> unrecognized command: '{command}'")
 
     async def action_quit(self) -> None:
         """Called when the user issues the 'quit' action (e.g., 'exit' command or Ctrl+C)."""
-        print("[i] exiting...")
+        print("<info> exiting...")
         # The _at_exit handler will call save_config and quit the driver
         await super().action_quit()
 
 
 if __name__ == "__main__":
-    # Remove the original main() wrapper and run the Textual App
     app = HomeworkApp()
     app.run()

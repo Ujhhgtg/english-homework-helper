@@ -1,8 +1,9 @@
 from rich.console import Console as RichConsole
 from rich.highlighter import ReprHighlighter as RichHighlighter
 from rich.theme import Theme as RichTheme
-from textual.widgets import Log as TextualLog
+from textual.widgets import RichLog as TextualLog
 from textual.app import App as TextualApp
+from textual.css.query import NoMatches
 
 
 class Messenger:
@@ -63,13 +64,21 @@ class TextualMessenger(Messenger):
         super().__init__()
 
     def send_text(self, *args, **kwargs):
-        log_widget = self.app.query_one("#output-log", TextualLog)
+        try:
+            log_widget = self.app.query_one("#output-log", TextualLog)
+        except NoMatches:
+            print(
+                f"<warning> could not following in app due to log widget not found:\n{args[0]}"
+            )
+            return
+
         message = (
             args[0]
-            .replace("<info>", "[i]")
-            .replace("<error>", "[error]")
-            .replace("<warning>", "[warning]")
-            .replace("<success>", "[b][green]")
-            .replace("</success>", "[/green][/b]")
+            .replace("[", "[[")
+            .replace("]", "]]")
+            .replace("<info>", "<[blue]info[/blue]>")
+            .replace("<error>", "<[red]error[/red]>")
+            .replace("<warning>", "<[yellow]warning[/yellow]>")
+            .replace("<success>", "<[b][green]success[/green][/b]>")
         )
         log_widget.write(message)

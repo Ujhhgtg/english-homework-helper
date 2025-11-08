@@ -282,7 +282,7 @@ def transcribe_audio(index: int, record: HomeworkRecord):
             whisper_device = "cpu"
         elif globalvars.config.whisper.device != "auto":
             print(
-                f"<warning> unrecognized whisper device '{globalvars.config.whisper.device}'; falling back to 'auto'"
+                f"<warning> unrecognized whisper device '{globalvars.config.whisper.device}'; falling back to 'auto'..."
             )
         whisper_model = whisper.load_model(
             globalvars.config.whisper.model,

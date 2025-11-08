@@ -89,7 +89,6 @@ def main():
                 f"<error> unsupported browser type: {globalvars.config.browser.type}; aborting..."
             )
             return
-
     driver_options = WebDriverOptions()
     if globalvars.config.browser.type != "safari":
         driver_options.binary_location = globalvars.config.browser.binary_path  # type: ignore

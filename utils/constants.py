@@ -32,9 +32,7 @@ TOTAL_SCORE_SELECTOR = (
 )
 IS_PASS_SELECTOR = "td:nth-child(7) > div:nth-child(1) > span:nth-child(1)"
 TEACHER_WORDS_SELECTOR = "td:nth-child(9) > div:nth-child(1)"
-STATUS_SELECTOR = (
-    "td:nth-child(11) > div:nth-child(1) > button:nth-child(1) > span:nth-child(1)"
-)
+STATUS_SELECTOR = "td:nth-child(11) > div:nth-child(1) > span:nth-child(1) > button:nth-child(1) > span:nth-child(1)"
 VIEW_COMPLETED_BUTTON_SELECTOR = (
     "td:nth-child(12) > div:nth-child(1) > div:nth-child(1) > button:nth-child(1)"
 )

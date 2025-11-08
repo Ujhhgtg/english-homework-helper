@@ -20,6 +20,7 @@ from utils.crypto import encodeb64_safe
 from utils.fs import read_file_text
 from utils.convert import mask_string_middle
 from utils.logging import print
+from utils.webdriver import safe_find_element
 import globalvars
 
 
@@ -105,8 +106,8 @@ def goto_hw_completed_page(index: int, record: HomeworkRecord):
 def logout() -> None:
     print("--- step: logout ---")
 
-    account_dropdown = globalvars.driver.safe_find_element(
-        By.CSS_SELECTOR, ACCOUNT_DROPDOWN_SELECTOR
+    account_dropdown = safe_find_element(
+        globalvars.driver, By.CSS_SELECTOR, ACCOUNT_DROPDOWN_SELECTOR
     )
     if account_dropdown is None:
         print("<warning> cannot find account dropdown; seems to be already logged out")
@@ -210,7 +211,7 @@ def download_audio(index: int, record: HomeworkRecord):
         # audio_element = globalvars.wait.until(
         #     EC.presence_of_element_located((By.TAG_NAME, "audio"))
         # )
-        audio_element = globalvars.driver.safe_find_element(By.TAG_NAME, "audio")
+        audio_element = safe_find_element(globalvars.driver, By.TAG_NAME, "audio")
         if not audio_element:
             print(f"<error> audio element not found")
             goto_hw_list_page()
@@ -502,7 +503,7 @@ def generate_answers(
     except TimeoutException:
         has_audio = False
 
-    # has_audio = globalvars.driver.safe_find_element(By.TAG_NAME, "audio") is not None
+    # has_audio = safe_find_element(globalvars.driver, By.TAG_NAME, "audio") is not None
     transcription_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
     if has_audio:
         if not Path(transcription_file).is_file():

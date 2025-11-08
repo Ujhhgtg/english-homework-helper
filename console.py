@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from selenium.webdriver.firefox.options import (
-    Options as FirefoxOptions,
-)
+
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 import atexit
@@ -11,12 +9,12 @@ from prompt_toolkit.shortcuts import choice
 from pathlib import Path
 import shlex
 from prompt_toolkit import PromptSession
+from rich import traceback
 
 from models.homework_record import HomeworkRecord
 from models.ai_client import AIClient
 from models.credentials import Credentials
 from utils.constants import *
-from utils.webdriver import FirefoxDriver
 from utils.logging import print
 from utils.convert import parse_int
 from utils.crypto import encodeb64_safe
@@ -47,6 +45,8 @@ def main():
     print("--- github: https://github.com/Ujhhgtg/english-homework-helper ---")
 
     print("--- step: initialize ---")
+    traceback.install()
+    print("<info> rich traceback installed")
     atexit.register(_at_exit)
     print("<info> registered atexit handler")
     Path("./cache/").mkdir(parents=True, exist_ok=True)
@@ -54,13 +54,56 @@ def main():
     globalvars.config = load_config()
     print("<info> loaded config file")
 
-    driver_options = FirefoxOptions()
+    match globalvars.config.browser.type:
+        case "chrome":
+            from selenium.webdriver.chrome.options import (
+                Options as WebDriverOptions,
+            )
+            from selenium.webdriver.chrome.webdriver import (
+                WebDriver,
+            )
+
+        case "firefox":
+            from selenium.webdriver.firefox.options import (
+                Options as WebDriverOptions,
+            )
+            from selenium.webdriver.firefox.webdriver import (
+                WebDriver,
+            )
+        case "edge":
+            from selenium.webdriver.edge.options import (
+                Options as WebDriverOptions,
+            )
+            from selenium.webdriver.edge.webdriver import (
+                WebDriver,
+            )
+        case "safari":
+            from selenium.webdriver.safari.options import (
+                Options as WebDriverOptions,
+            )
+            from selenium.webdriver.safari.webdriver import (
+                WebDriver,
+            )
+        case _:
+            print(
+                f"<error> unsupported browser type: {globalvars.config.browser.type}; aborting..."
+            )
+            return
+
+    driver_options = WebDriverOptions()
+    if globalvars.config.browser.type != "safari":
+        driver_options.binary_location = globalvars.config.browser.binary_path  # type: ignore
+    else:
+        if globalvars.config.browser.binary_path != "":
+            print(
+                "<warning> safari browser binary path is ignored; using system default"
+            )
     if globalvars.config.browser.headless:
         driver_options.add_argument("--headless")
-    globalvars.driver = FirefoxDriver(options=driver_options)
+    globalvars.driver = WebDriver(options=driver_options)  # type: ignore
     globalvars.wait = WebDriverWait(globalvars.driver, 15)
     print(
-        f"<info> started browser{" in headless mode" if globalvars.config.browser.headless else ""}"
+        f"<info> started browser {globalvars.config.browser.type} {" in headless mode" if globalvars.config.browser.headless else ""}"
     )
 
     ai_client: AIClient | None = None

@@ -9,3 +9,5 @@ openai
 # python-telegram-bot
 munch
 json5
+textual
+textual-dev

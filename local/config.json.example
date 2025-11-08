@@ -1,5 +1,7 @@
 {
     "browser": {
+        "type": "firefox",
+        "binary_path": "/usr/bin/firefox",
         "headless": true
     },
     "credentials": {

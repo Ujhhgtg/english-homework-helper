@@ -78,6 +78,7 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
             "default": 0,
             "all": [
                 {
+                    "type": "openai",
                     "api_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
                     "api_key": "YOUR API KEY HERE",
                     "model": "find one in https://ai.google.dev/gemini-api/docs/models"
@@ -116,6 +117,7 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
             "default": 0,
             "all": [
                 {
+                    "type": "openai",
                     "api_url": "http://localhost:11434/v1/",
                     "api_key": "ollama",
                     "model": [

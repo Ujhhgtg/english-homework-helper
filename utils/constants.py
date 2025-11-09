@@ -105,7 +105,7 @@ COMPLETION_WORD_MAP = {
 
 
 GENERATE_ANSWERS_WITH_LISTENING_PROMPT = """
-Complete the following listening comprehension.
+Complete the following questions.
 
 Listening audio transcription:
 ```
@@ -136,6 +136,8 @@ Output requirements:
 """
 
 GENERATE_ANSWERS_PROMPT = """
+Complete the following questions.
+
 Questions:
 ```
 {questions}

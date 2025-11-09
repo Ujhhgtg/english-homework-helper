@@ -350,9 +350,14 @@ def download_text(index: int, record: HomeworkRecord):
     )
 
 
-# TODO: fill-in-the-blanks questions
 def fill_in_answers(index: int, record: HomeworkRecord, answers: dict) -> None:
     print(f"--- step: fill in answers for index {index} ---")
+
+    if globalvars.config.browser.headless:
+        print(
+            "<error> browser is running in headless mode, answers could not be submitted; turn off headless mode and try again"
+        )
+        return
 
     if not goto_hw_original_page(index, record):
         print("<error> failed to navigate to hw original page; aborting...")

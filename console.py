@@ -233,7 +233,8 @@ def main():
                     match input_parts[1]:
                         case "fill_in":
                             answers_input = session.prompt("answers: ").strip()
-                            answers = json.loads(answers_input)
+                            with open(answers_input, "rt", encoding="utf-8") as f:
+                                answers = json.load(f)
                             fill_in_answers(index, hw_list[index], answers)
 
                         case "download":

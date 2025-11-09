@@ -187,6 +187,8 @@ def get_list() -> list[HomeworkRecord]:
             else:
                 break
 
+        goto_hw_list_page()
+
         return homework_records
 
     except Exception as e:
@@ -414,7 +416,7 @@ def fill_in_answers(index: int, record: HomeworkRecord, answers: dict) -> None:
                     EC.element_to_be_clickable((By.XPATH, xpath))
                 ).click()
                 print(
-                    f"<success> ✅ question {q_num} (choice): selected option {answer_letter}"
+                    f"<success> question {q_num} (choice): selected option {answer_letter}"
                 )
 
             elif question_info["type"] == "text":
@@ -432,12 +434,12 @@ def fill_in_answers(index: int, record: HomeworkRecord, answers: dict) -> None:
                 text_input_element.send_keys(answer_text)
 
                 print(
-                    f"<success> ✅ question {q_num} (FIB): filled text '{answer_text}'"
+                    f"<success> question {q_num} (fill-in-blanks): filled text '{answer_text}'"
                 )
 
         except Exception as e:
             print(
-                f"<error> ❌ could not set answer '{answer}' for question {q_num} ({question_info['type']}): {e}"
+                f"<error> could not set answer '{answer}' for question {q_num} ({question_info['type']}): {e}"
             )
 
     print("\n<info> all answers filled in; please review and submit manually")
@@ -496,14 +498,14 @@ def generate_answers(
         print("<error> failed to navigate to hw original page; aborting...")
         return None
 
-    audio_wait = WebDriverWait(globalvars.driver, 1.5)
-    try:
-        audio_wait.until(EC.presence_of_element_located((By.TAG_NAME, "audio")))
-        has_audio = True
-    except TimeoutException:
-        has_audio = False
+    # audio_wait = WebDriverWait(globalvars.driver, 1.5)
+    # try:
+    #     audio_wait.until(EC.presence_of_element_located((By.TAG_NAME, "audio")))
+    #     has_audio = True
+    # except TimeoutException:
+    #     has_audio = False
 
-    # has_audio = safe_find_element(globalvars.driver, By.TAG_NAME, "audio") is not None
+    has_audio = safe_find_element(globalvars.driver, By.TAG_NAME, "audio") is not None
     transcription_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
     if has_audio:
         if not Path(transcription_file).is_file():

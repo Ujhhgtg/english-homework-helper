@@ -130,6 +130,8 @@ def get_list() -> list[HomeworkRecord]:
     homework_records: list[HomeworkRecord] = []
 
     try:
+        page_n = 1
+
         while True:
             globalvars.wait.until(
                 EC.presence_of_element_located(
@@ -146,7 +148,9 @@ def get_list() -> list[HomeworkRecord]:
                 )
                 break
 
-            print(f"<info> found {len(homework_rows)} homework items to parse")
+            print(
+                f"<info> found {len(homework_rows)} homework items to parse in page {page_n}"
+            )
 
             for i, row in enumerate(homework_rows):
                 title = row.find_element(By.CSS_SELECTOR, TITLE_SELECTOR).text
@@ -165,7 +169,7 @@ def get_list() -> list[HomeworkRecord]:
                     title=title,
                     start_time=start_time,
                     end_time=end_time,
-                    teacher=teacher_name,
+                    teacher_name=teacher_name,
                     pass_score=pass_score,
                     current_score=current_score,
                     total_score=total_score,
@@ -184,6 +188,7 @@ def get_list() -> list[HomeworkRecord]:
             )
             if not next_page_button.get_attribute("disabled"):
                 next_page_button.click()
+                page_n += 1
             else:
                 break
 
@@ -195,6 +200,7 @@ def get_list() -> list[HomeworkRecord]:
         print(
             f"<error> critical error during homework table parsing: {e}; returning empty list"
         )
+        goto_hw_list_page()
         return []
 
 

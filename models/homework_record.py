@@ -10,7 +10,7 @@ class HomeworkRecord:
     title: str
     start_time: str | None
     end_time: str | None
-    teacher: str | None
+    teacher_name: str | None
     pass_score: str | None
     current_score: str | None
     total_score: str | None

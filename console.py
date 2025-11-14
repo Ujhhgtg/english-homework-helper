@@ -124,11 +124,11 @@ def main():
         if 0 <= sel_index < len(globalvars.config.credentials.all):
             cred = Credentials.from_dict(globalvars.config.credentials.all[sel_index])
             login(cred)
-            goto_hw_list_page()
-            hw_list = get_list()
             print(
                 f"<info> using default credentials at index {sel_index}: {cred.describe()}"
             )
+            goto_hw_list_page()
+            hw_list = get_list()
         else:
             print(
                 f"<warning> default credentials index {sel_index} out of range; not logging in"
@@ -166,6 +166,9 @@ def main():
                     print("  account - login/logout/select default account")
                     print("  ai - select AI client")
                     print("  config - reload/save configuration")
+                    print(
+                        "  rescue - try to recover from an unexpected error by returning to homework list page"
+                    )
                     print("  exit - exit the program")
 
                 case "list":
@@ -434,6 +437,9 @@ def main():
                             print("<info> saved config to file")
                         case _:
                             print("<error> argument invalid")
+
+                case "rescue":
+                    goto_hw_list_page()
 
                 case "exit":
                     print("<info> exiting...")

@@ -50,7 +50,18 @@ ANSWER_TEXT_SELECTOR = "td:nth-child(3) > div:nth-child(1) > span:nth-child(1)"
 DRAG_DISTANCE_PIXELS = 300
 
 COMPLETION_WORD_MAP = {
-    (): ["list", "audio", "text", "answers", "help", "account", "ai", "config", "exit"],
+    (): [
+        "list",
+        "audio",
+        "text",
+        "answers",
+        "help",
+        "account",
+        "ai",
+        "config",
+        "rescue",
+        "exit",
+    ],
     ("list",): [],
     ("audio",): ["download", "transcribe"],
     (
@@ -100,6 +111,7 @@ COMPLETION_WORD_MAP = {
         "config",
         "save",
     ): [],
+    ("rescue",): [],
     ("exit",): [],
 }
 

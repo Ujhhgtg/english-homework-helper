@@ -2,12 +2,12 @@ selenium
 prompt_toolkit
 rich
 openai-whisper
-openai
-# torch
-# torchvision
-# torchaudio
-# python-telegram-bot
+python-telegram-bot
 munch
+openai
 json5
 textual
 textual-dev
+httpx
+httpx[socks]
+beautifulsoup4

@@ -182,7 +182,7 @@ class HomeworkApp(App):
                 try:
                     login(cred)
                     goto_hw_list_page()
-                    self.hw_list = get_list()
+                    self.hw_list = get_hw_list()
                     self._update_homework_list_view()
                     print(
                         f"<info> using default credentials at index {sel_index}: {cred.describe()}"
@@ -258,7 +258,7 @@ class HomeworkApp(App):
                 print("  exit - exit the program")
 
             case "list":
-                self.hw_list = get_list()
+                self.hw_list = get_hw_list()
                 self._update_homework_list_view()
                 print("<info> homework list updated")
 
@@ -355,7 +355,7 @@ class HomeworkApp(App):
                     )
                     with open(answers_file, "wt", encoding="utf-8") as f:
                         f.write(json.dumps(answers, indent=4, ensure_ascii=False))
-                    print(f"[success] saved to file {answers_file}")
+                    print(f"[success] saved to file '{answers_file}'")
 
                 elif subcommand == "generate":
                     if self.ai_client is None:
@@ -369,7 +369,7 @@ class HomeworkApp(App):
                     answers_file = f"cache/homework_{encodeb64_safe(record.title)}_answers_gen.json"
                     with open(answers_file, "wt", encoding="utf-8") as f:
                         f.write(json.dumps(answers, indent=4, ensure_ascii=False))
-                    print(f"[success] saved to file {answers_file}")
+                    print(f"[success] saved to file '{answers_file}'")
 
                 else:
                     print("<error> argument invalid")
@@ -409,7 +409,7 @@ class HomeworkApp(App):
                         logout()
                         login(cred)
                         goto_hw_list_page()
-                        self.hw_list = get_list()
+                        self.hw_list = get_hw_list()
                         self._update_homework_list_view()
                         print(
                             f"[success] Logged in with credentials: {cred.describe()}"
@@ -577,9 +577,7 @@ class HomeworkApp(App):
                 print(f"<error> unrecognized command: '{command}'")
 
     async def action_quit(self) -> None:
-        """Called when the user issues the 'quit' action (e.g., 'exit' command or Ctrl+C)."""
         print("<info> exiting...")
-        # The _at_exit handler will call save_config and quit the driver
         await super().action_quit()
 
 

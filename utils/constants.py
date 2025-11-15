@@ -81,10 +81,12 @@ COMPLETION_WORD_MAP = {
         "text",
         "download",
     ): [],
-    ("answers",): ["download", "fill_in", "generate"],
+    ("answers",): ["download", "fill_in", "generate", "download_from_paper", "submit"],
     ("answers", "download"): [],
     ("answers", "fill_in"): [],
     ("answers", "generate"): [],
+    ("answers", "download_from_paper"): [],
+    ("answers", "submit"): [],
     ("help",): [],
     ("account",): ["login", "logout", "select_default"],
     (
@@ -159,7 +161,7 @@ Output format (index starts at 1):
 ```
 [
     {
-        "number": 1,
+        "index": 1,
         "type": "choice",
         "content": "A"
     },

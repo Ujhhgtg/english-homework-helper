@@ -6,8 +6,6 @@ from utils.convert import mask_string_middle
 
 @dataclass
 class Credentials:
-    """Represents user credentials."""
-
     school: str
     username: str
     password: str

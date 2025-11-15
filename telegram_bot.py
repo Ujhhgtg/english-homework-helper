@@ -15,7 +15,7 @@ hw_list: list[HomeworkRecord] = []
 async def command_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global hw_list
 
-    hw_list = get_list()
+    hw_list = get_hw_list()
     if not hw_list:
         # Simple message for no homework, no special formatting needed
         await context.bot.send_message(

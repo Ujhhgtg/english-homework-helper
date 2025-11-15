@@ -1,6 +1,6 @@
 # 📚 English Homework Helper
 
-A powerful command-line tool designed to automate login, homework list parsing, and content extraction (including audio downloading and transcription) from the [简练英语平台](https://admin.jeedu.net) platform using Selenium and OpenAI's Whisper.
+A powerful command-line tool designed to automate login, homework list parsing, and content extraction (including audio downloading and transcription) from the [简练英语平台](https://admin.jeedu.net) platform using Selenium or httpx & BeautifulSoup and OpenAI's Whisper.
 
 ## ✨ Features
 
@@ -16,15 +16,20 @@ A powerful command-line tool designed to automate login, homework list parsing, 
 
 - Interactive Interface: Provides a dynamic, user-friendly command-line interface powered by `prompt-toolkit`.
 
+- 2 Operation Modes: Browser automation-based (using Selenium) and API-based (using httpx & BeautifulSoup)
+
 ## 🚀 Setup & Installation
 
 ### Prerequisites
 
-You need to have Python 3.9+ and Firefox installed on your system.
+You need to have Python 3.9+ installed on your system. If you prefer the Selenium version, you also need a browser (Edge, Chrome, Firefox or Safari) installed.
 
 ### 1. Clone repo & Install deps
 
 Clone the repository and install the required Python packages:
+
+> [!NOTE]
+> You can install the dependencies present in `requirements.txt` selectively, if you don't need the Telegram bot, TUI or the browser version script.
 
 ```bash
 git clone https://github.com/Ujhhgtg/english-homework-helper.git
@@ -138,7 +143,10 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
 Run the main script:
 
 ```bash
+# browser version
 python console.py
+# api version
+python console_api.py
 ```
 
 ## 🤝 Contributing

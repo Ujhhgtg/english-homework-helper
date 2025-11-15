@@ -4,8 +4,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
-import json
-import urllib.request
+import json5
 import openai
 import time
 import whisper
@@ -19,13 +18,12 @@ from utils.constants import *
 from utils.crypto import encodeb64_safe
 from utils.fs import read_file_text
 from utils.convert import mask_string_middle
-from utils.logging import print
+from utils.logging import print, download_file_with_progress
 from utils.webdriver import safe_find_element
 import globalvars
 
 
 def _safe_get_text(element, selector: str):
-    """Safely finds and returns the text of a child element, returns None on failure."""
     try:
         return element.find_element(By.CSS_SELECTOR, selector).text
     except:
@@ -33,12 +31,11 @@ def _safe_get_text(element, selector: str):
 
 
 def _get_status_enum(status_text: str | None) -> HomeworkStatus | None:
-    """Converts the scraped status string to the HomeworkStatus Enum."""
     if not status_text:
         return None
 
     for member in HomeworkStatus:
-        if member.value == status_text:
+        if member.value[1] == status_text:
             return member
 
     return None
@@ -124,13 +121,12 @@ def logout() -> None:
     print("<success> logged out")
 
 
-def get_list() -> list[HomeworkRecord]:
-    """Finds and extracts data from all homework rows on the current page (table structure)."""
+def get_hw_list() -> list[HomeworkRecord]:
     print("--- step: retrieve homework list ---")
     homework_records: list[HomeworkRecord] = []
 
     try:
-        page_n = 1
+        cur_page = 1
 
         while True:
             globalvars.wait.until(
@@ -149,46 +145,62 @@ def get_list() -> list[HomeworkRecord]:
                 break
 
             print(
-                f"<info> found {len(homework_rows)} homework items to parse in page {page_n}"
+                f"<info> found {len(homework_rows)} homework items to parse in page {cur_page}"
             )
 
             for i, row in enumerate(homework_rows):
                 title = row.find_element(By.CSS_SELECTOR, TITLE_SELECTOR).text
-                start_time = _safe_get_text(row, START_TIME_SELECTOR)
-                end_time = _safe_get_text(row, END_TIME_SELECTOR)
+                publish_time = _safe_get_text(row, START_TIME_SELECTOR)
+                due_time = _safe_get_text(row, END_TIME_SELECTOR)
                 teacher_name = _safe_get_text(row, TEACHER_SELECTOR)
-                pass_score = _safe_get_text(row, PASS_SCORE_SELECTOR)
-                current_score = _safe_get_text(row, CURRENT_SCORE_SELECTOR)
-                total_score = _safe_get_text(row, TOTAL_SCORE_SELECTOR)
-                is_pass = _safe_get_text(row, IS_PASS_SELECTOR)
+                _pass_score = _safe_get_text(row, PASS_SCORE_SELECTOR)
+                if _pass_score:
+                    if _pass_score == "不限":
+                        pass_score = 0.0
+                    else:
+                        pass_score = float(_pass_score)
+                else:
+                    pass_score = None
+                _current_score = _safe_get_text(row, CURRENT_SCORE_SELECTOR)
+                if _current_score:
+                    current_score = float(_current_score)
+                else:
+                    current_score = None
+                _total_score = _safe_get_text(row, TOTAL_SCORE_SELECTOR)
+                if _total_score:
+                    total_score = float(_total_score)
+                else:
+                    total_score = None
+                # is_pass = _safe_get_text(row, IS_PASS_SELECTOR)
+                if _pass_score is not None and _current_score is not None:
+                    is_pass = current_score >= pass_score  # type: ignore
+                else:
+                    is_pass = None
                 teacher_words = _safe_get_text(row, TEACHER_WORDS_SELECTOR)
                 status_text = _safe_get_text(row, STATUS_SELECTOR)
                 status_enum = _get_status_enum(status_text)
 
                 record = HomeworkRecord(
                     title=title,
-                    start_time=start_time,
-                    end_time=end_time,
-                    teacher_name=teacher_name,
-                    pass_score=pass_score,
-                    current_score=current_score,
-                    total_score=total_score,
+                    publish_time=publish_time,
+                    due_time=due_time,
+                    teacher_name=teacher_name or "",
+                    pass_score=pass_score,  # type: ignore
+                    current_score=current_score,  # type: ignore
+                    total_score=total_score,  # type: ignore
                     is_pass=is_pass,
                     teacher_comment=teacher_words,
                     status=status_enum,
                 )
 
                 homework_records.append(record)
-                print(
-                    f"<success> extracted {i}: Title='{title}', Status='{status_enum} ({status_text})', Score='{current_score}/{total_score}'"
-                )
 
             next_page_button = globalvars.driver.find_element(
                 By.CSS_SELECTOR, NEXT_PAGE_BUTTON_SELECTOR
             )
             if not next_page_button.get_attribute("disabled"):
                 next_page_button.click()
-                page_n += 1
+                cur_page += 1
             else:
                 break
 
@@ -205,7 +217,7 @@ def get_list() -> list[HomeworkRecord]:
 
 
 def download_audio(index: int, record: HomeworkRecord):
-    print(f"--- step: download audio of index {index} ---")
+    print(f"--- step: download audio of index {index}: '{record.title}' ---")
 
     try:
         if not goto_hw_original_page(index, record):
@@ -234,12 +246,12 @@ def download_audio(index: int, record: HomeworkRecord):
         filename = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
         try:
             print(f"<info> downloading audio from: {audio_url}")
-            urllib.request.urlretrieve(audio_url, filename)
+            globalvars.context.messenger.send_progress(
+                download_file_with_progress, audio_url, filename
+            )
             print(f"<success> file saved as '{filename}'")
         except Exception as download_e:
-            print(
-                f"<error> failed to download audio using urllib.request: {download_e}"
-            )
+            print(f"<error> failed to download audio: {download_e}")
 
         goto_hw_list_page()
 
@@ -248,17 +260,14 @@ def download_audio(index: int, record: HomeworkRecord):
 
 
 def transcribe_audio(index: int, record: HomeworkRecord):
-    global whisper_model, config
-
-    print(f"--- step: transcribe audio of index {index} ---")
+    print(f"--- step: transcribe audio of index {index}: '{record.title}' ---")
 
     audio_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
 
-    # global whisper_model
     # if whisper_model is None:
     #     print("<info> loading Whisper model (this may take a while)...")
     #     whisper_model = faster_whisper.WhisperModel(
-    #         config.whisper.model, device="cuda", compute_type="float16"
+    #         globalvars.config.whisper.model, device="cuda", compute_type="float16"
     #     )
     # else:
     #     print("<info> Whisper model already loaded")
@@ -292,7 +301,7 @@ def transcribe_audio(index: int, record: HomeworkRecord):
             print(
                 f"<warning> unrecognized whisper device '{globalvars.config.whisper.device}'; falling back to 'auto'..."
             )
-        whisper_model = whisper.load_model(
+        globalvars.whisper_model = whisper.load_model(
             globalvars.config.whisper.model,
             device=whisper_device,
             in_memory=globalvars.config.whisper.in_memory,
@@ -301,7 +310,9 @@ def transcribe_audio(index: int, record: HomeworkRecord):
         print("<info> Whisper model already loaded")
 
     print(f"<info> transcribing audio file: {audio_file} (this may take a while)...")
-    result = whisper_model.transcribe(audio_file, language="en", verbose=False)
+    result = globalvars.whisper_model.transcribe(
+        audio_file, language="en", verbose=False
+    )
     transcription = result.get("text", None)
     if transcription is None or (transcription is str and transcription.strip() == ""):
         print(f"<error> transcription failed or returned empty result")
@@ -333,27 +344,27 @@ def get_text(index: int, record: HomeworkRecord) -> str | None:
     paper_element = globalvars.wait.until(
         EC.presence_of_element_located((By.CSS_SELECTOR, PAPER_SELECTOR))
     )
-    homework_text = paper_element.text
+    text_content = paper_element.text
+    print(
+        f"<success> extracted text content for '{record.title}'; totaling {len(text_content)} chars in length"
+    )
 
     goto_hw_list_page()
-
-    return homework_text
+    return text_content
 
 
 def download_text(index: int, record: HomeworkRecord):
     print(f"--- step: download text content of index {index} ---")
 
-    homework_text = get_text(index, record)
-    if homework_text is None:
+    text_content = get_text(index, record)
+    if text_content is None:
         print(f"<error> failed to retrieve text content for index {index}")
         return
 
     text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
     with open(text_file, "w", encoding="utf-8") as f:
-        f.write(homework_text)
-    print(
-        f"<info> text content saved to '{text_file}'; totalling {len(homework_text)} chars in length"
-    )
+        f.write(text_content)
+    print(f"<info> saved to file '{text_file}'")
 
 
 def fill_in_answers(index: int, record: HomeworkRecord, answers: dict) -> None:
@@ -453,11 +464,11 @@ def fill_in_answers(index: int, record: HomeworkRecord, answers: dict) -> None:
                 f"<error> could not set answer '{answer}' for question {q_num} ({question_info['type']}): {e}"
             )
 
-    print("\n<info> all answers filled in; please review and submit manually")
+    print("<info> all answers filled in; please review and submit manually")
 
 
 def get_answers(index: int, record: HomeworkRecord) -> list[dict]:
-    print(f"--- step: retrieve answers for index {index}: {record.title}")
+    print(f"--- step: retrieve answers for index {index}: '{record.title}'")
 
     if record.status != HomeworkStatus.COMPLETED:
         goto_hw_list_page()
@@ -502,8 +513,8 @@ def get_answers(index: int, record: HomeworkRecord) -> list[dict]:
 
 def generate_answers(
     index: int, record: HomeworkRecord, client: AIClient
-) -> dict | None:
-    print(f"--- step: generate answers for index {index}: {record.title} ---")
+) -> list[dict] | None:
+    print(f"--- step: generate answers for index {index}: '{record.title}' ---")
 
     if not goto_hw_original_page(index, record):
         print("<error> failed to navigate to hw original page; aborting...")
@@ -572,7 +583,7 @@ def generate_answers(
     goto_hw_list_page()
 
     try:
-        answers = json.loads(raw_data)
+        answers: list[dict] = json5.loads(raw_data)  # type: ignore
         print(
             f"<success> model result is valid; totalling {len(raw_data)} chars in length"
         )
@@ -594,7 +605,7 @@ def generate_answers(
         print(f"<info> post-processed model result for {post_process_count} times")
         return answers
 
-    except json.JSONDecodeError:
+    except ValueError:
         print(f"<error> model result is not valid json")
         return None
 
@@ -649,3 +660,27 @@ def login(credentials: Credentials):
         Keys.ESCAPE
     )  # close "set security questions" dialog
     print("<success> logged in")
+
+
+def print_hw_list(hw_list: list[HomeworkRecord]) -> None:
+    globalvars.context.messenger.send_table(
+        title="Homework List",
+        show_header=True,
+        columns=[
+            ("Index", "cyan", "right"),
+            ("Title", "magenta", "left"),
+            ("Status", "yellow"),
+            ("Score", "red", "center"),
+        ],
+        rows=list(
+            map(
+                lambda enum_obj: (
+                    str(enum_obj[0]),
+                    enum_obj[1].title,
+                    f"{enum_obj[1].status} ({enum_obj[1].status.value[1]})",  # type: ignore
+                    f"{enum_obj[1].current_score}/{enum_obj[1].total_score}",
+                ),
+                enumerate(hw_list),
+            )
+        ),
+    )

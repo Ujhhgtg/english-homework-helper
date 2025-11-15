@@ -1,6 +1,8 @@
 from rich.console import Console as RichConsole
 from rich.highlighter import ReprHighlighter as RichHighlighter
 from rich.theme import Theme as RichTheme
+from rich.table import Table as RichTable
+from rich.progress import Progress as RichProgress
 from textual.widgets import RichLog as TextualLog
 from textual.app import App as TextualApp
 from textual.css.query import NoMatches
@@ -8,6 +10,19 @@ from textual.css.query import NoMatches
 
 class Messenger:
     def send_text(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def send_table(
+        self,
+        *args,
+        title: str,
+        columns: list[tuple[str, str, str] | tuple[str, str]],
+        rows: list[tuple],
+        **kwargs,
+    ):
+        raise NotImplementedError
+
+    def send_progress(self, *args, **kwargs):
         raise NotImplementedError
 
 
@@ -37,6 +52,38 @@ class ConsoleMessenger(Messenger):
 
     def send_text(self, *args, **kwargs):
         self.rich_console.print(*args, **kwargs)
+
+    def send_table(
+        self,
+        title: str,
+        columns: list[tuple[str, str, str] | tuple[str, str]],
+        rows: list[tuple],
+        show_header: bool = True,
+        header_style: str = "bold green",
+    ):
+        table = RichTable(
+            title=title, show_header=show_header, header_style=header_style
+        )
+
+        for column in columns:
+            try:
+                justify = column[2]  # type: ignore
+            except IndexError:
+                justify = "left"
+            table.add_column(
+                column[0],
+                style=column[1],
+                justify=justify,  # type: ignore
+            )
+
+        for row in rows:
+            table.add_row(*row)
+
+        self.rich_console.print(table)
+
+    def send_progress(self, func, *args, **kwargs):
+        with RichProgress(console=self.rich_console) as progress:
+            func(progress, *args, **kwargs)
 
 
 class TelegramMessenger(Messenger):

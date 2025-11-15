@@ -1,4 +1,12 @@
 import base64
+import hashlib
+
+
+def get_md5_str_of_str(input_string: str) -> str:
+    byte_string = input_string.encode()
+    md5_hash = hashlib.md5()
+    md5_hash.update(byte_string)
+    return md5_hash.hexdigest()
 
 
 # powered by Google Gemini

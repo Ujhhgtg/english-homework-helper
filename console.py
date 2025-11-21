@@ -34,7 +34,7 @@ def _at_exit():
             globalvars.driver.current_url
             globalvars.driver.quit()
             print("<info> atexit: browser closed automatically")
-        except Exception as e:
+        except:
             print(f"<error> critical error during exit:")
             raise
 

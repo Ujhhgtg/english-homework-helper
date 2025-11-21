@@ -1,12 +1,12 @@
-selenium
-prompt_toolkit
-rich
+selenium>=4,<5
+prompt_toolkit>=3,<4
+rich>=14,<15
 openai-whisper
 python-telegram-bot
 munch
 openai
 json5
-textual
+textual>=6,<7
 textual-dev
 httpx
 httpx[socks]

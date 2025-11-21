@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-# TODO: figure out what the Nones are
+# TODO: figure out what the `None`s are
 class HomeworkStatus(Enum):
     COMPLETED = (4, "已完成")
     IN_PROGRESS = (1, "进行中")

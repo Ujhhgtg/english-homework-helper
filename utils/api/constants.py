@@ -9,6 +9,7 @@ GET_HW_PAPER_URL = "/api/exam/taskPaper"
 LOAD_ANSWERS_CACHE_URL = "/api/exam/studentApi/loadCache"
 SAVE_ANSWERS_CACHE_URL = "/api/exam/studentApi/saveCache"
 SUBMIT_ANSWERS_URL = "/api/exam/studentApi/userTaskSubmit"
+START_HW_URL = "/api/exam/studentApi/userTaskStart"
 
 COMPLETION_WORD_MAP[()].remove("rescue")
 del COMPLETION_WORD_MAP[("rescue",)]

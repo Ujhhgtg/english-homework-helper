@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-import atexit
-from prompt_toolkit.shortcuts import choice
-from pathlib import Path
-import shlex
 import json
-from prompt_toolkit import PromptSession
+import shlex
+import atexit
+from pathlib import Path
+
 from rich import traceback
+from prompt_toolkit.shortcuts import choice
+from prompt_toolkit import PromptSession
+from selenium.webdriver.support.ui import WebDriverWait
 
 from models.homework_record import HomeworkRecord
 from models.ai_client import AIClient

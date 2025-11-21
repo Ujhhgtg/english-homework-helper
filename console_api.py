@@ -2,10 +2,13 @@
 # -*- coding: utf-8 -*-
 
 
-from prompt_toolkit.shortcuts import choice
-from pathlib import Path
+import json
 import shlex
+from pathlib import Path
+
+import httpx
 from prompt_toolkit import PromptSession
+from prompt_toolkit.shortcuts import choice
 from rich import traceback
 
 from models.homework_record import HomeworkRecord
@@ -23,8 +26,6 @@ from utils.context.messenger import ConsoleMessenger
 from tasks_api import *
 from tasks import print_hw_list
 import globalvars
-import httpx
-import json
 
 
 def main():
@@ -206,7 +207,19 @@ def main():
                                 print("<error> not logged in; cannot fill in answers")
                                 continue
 
-                            answers_input = session.prompt("answers: ").strip()
+                            hw = hw_list[index]
+                            if hw.status in [
+                                HomeworkStatus.NOT_COMPLETED,
+                                HomeworkStatus.MAKE_UP,
+                            ]:
+                                print(
+                                    "<info> starting hw since it's not completed or needs makeup"
+                                )
+                                start_hw(token, hw_list[index])
+
+                            answers_input = session.prompt(
+                                "answers file (relative path is ok): "
+                            ).strip()
                             with open(answers_input, "rt", encoding="utf-8") as f:
                                 answers = json.load(f)
                             fill_in_answers(token, hw_list[index], answers)
@@ -277,6 +290,20 @@ def main():
                                     json.dumps(answers, indent=4, ensure_ascii=False)
                                 )
                             print(f"<success> saved to file '{answers_file}'")
+
+                        case "submit":
+                            if token is None:
+                                print("<error> not logged in; cannot submit homework")
+                                continue
+
+                            submit_answers(token, hw_list[index])
+
+                        case "start":
+                            if token is None:
+                                print("<error> not logged in; cannot start homework")
+                                continue
+
+                            start_hw(token, hw_list[index])
 
                         case _:
                             print("<error> argument invalid")

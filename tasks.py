@@ -1,14 +1,15 @@
+import time
+from pathlib import Path
+
+import json5
+import openai
+import whisper
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
-import json5
-import openai
-import time
-import whisper
-from pathlib import Path
 
 from models.homework_status import HomeworkStatus
 from models.homework_record import HomeworkRecord

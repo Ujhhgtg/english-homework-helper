@@ -1,9 +1,10 @@
-from bs4 import BeautifulSoup
+import re
 from pathlib import Path
+
 import json5
 import openai
-import re
 import whisper
+from bs4 import BeautifulSoup
 
 from utils.api.constants import *
 from utils.constants import (
@@ -660,3 +661,21 @@ def submit_answers(token: Token, record: HomeworkRecord) -> None:
         return
 
     print("<success> answers submitted")
+
+
+def start_hw(token: Token, record: HomeworkRecord) -> None:
+    print(f"--- step: start homework for '{record.title}' ---")
+
+    headers = _get_headers(token)
+    if headers is None:
+        print("<error> authorization failed")
+        return
+
+    payload = {"id": record.api_id}
+    response = globalvars.http_client.post(START_HW_URL, json=payload, headers=headers)
+    data = response.json()
+    if data.get("success", False) is False:
+        print(f"<error> failed to start homework: {data}")
+        return
+
+    print("<success> homework started")

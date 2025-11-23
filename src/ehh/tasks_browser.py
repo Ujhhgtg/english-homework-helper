@@ -297,6 +297,14 @@ def transcribe_audio(index: int, record: HomeworkRecord):
 
     # print(f"<success> transcription saved to '{transcription_file}'")
 
+    try:
+        import whisper
+    except ImportError:
+        print(
+            "<error> openai-whisper not installed; please install the 'transcription' extra requirement"
+        )
+        return
+
     if globalvars.context.whisper_model is None:
         print(
             f"<info> loading Whisper model{" into memory" if globalvars.context.config.whisper.in_memory else ""} (this may take a while)..."

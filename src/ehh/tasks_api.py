@@ -5,8 +5,6 @@ from typing import Optional
 
 import json5
 import openai
-import whisper
-import pyperclip
 from bs4 import BeautifulSoup
 
 from .utils.api.constants import *
@@ -250,8 +248,6 @@ def _get_questions(token: Token, record: HomeworkRecord) -> Optional[list[dict]]
     if paper is None:
         return None
 
-    pyperclip.copy(paper["flows"])
-    print(len(paper["flows"]))
     q_list: list[dict] = list(
         map(
             lambda q: {
@@ -373,6 +369,14 @@ def transcribe_audio(record: HomeworkRecord):
     #             f.write(segment.text)
 
     # print(f"<success> transcription saved to '{transcription_file}'")
+
+    try:
+        import whisper
+    except ImportError:
+        print(
+            "<error> openai-whisper not installed; please install the 'transcription' extra requirement"
+        )
+        return
 
     if globalvars.context.whisper_model is None:
         print(

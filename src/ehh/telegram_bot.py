@@ -1,26 +1,31 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
+from pathlib import Path
+from typing import Optional
 
-from telegram import Update
+import httpx
+
+try:
+    from telegram import Update
+except ImportError:
+    print(
+        "<error> python-telegram-bot not installed; please install the 'telegram' extra requirement"
+    )
+    exit(1)
 from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
 )
 
-from pathlib import Path
-from typing import Optional
-
-import httpx
-import json
 
 from .models.homework_record import HomeworkRecord
 from .models.homework_status import HomeworkStatus
 from .models.credentials import Credentials
 from .models.api.token import Token
 from .models.ai_client import AIClient
-
 from .tasks_api import (
     get_hw_list,
     download_audio,

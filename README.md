@@ -22,19 +22,11 @@ A powerful command-line tool designed to automate login, homework list parsing, 
 
 ### Prerequisites
 
-You need to have Python 3.9+ installed on your system. If you prefer the Selenium version, you also need a browser (Edge, Chrome, Firefox or Safari) installed.
+You need to have Python 3.9+ and [just](https://github.com/casey/just) installed on your system. If you prefer the browser version, you also need a browser (Edge, Chrome, Firefox or Safari) installed.
 
-### 1. Clone repo & Install deps
-
-Clone the repository and install the required Python packages:
-
-> [!NOTE]
-> You can install the dependencies present in `requirements.txt` selectively, if you don't need the Telegram bot, TUI or the browser version script.
+### 1. [Optional] Install PyTorch 
 
 ```bash
-git clone https://github.com/Ujhhgtg/english-homework-helper.git
-cd english-homework-helper
-
 # Install PyTorch for GPU-accelerated Whisper audio transcription (highly recommended)
 # Choose the correct command based on your device/CUDA version (skip to fallback to CPU)
 # CUDA 12.6
@@ -45,12 +37,33 @@ pip install torch torchvision
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
 # ROCm 6.4 (For some AMD GPUs)
 pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.4
-
-pip install -r requirements.txt
-
 ```
 
-### 2. Configure Settings
+### 2. Install package
+
+#### A. From source, with Pip
+
+```bash
+pip install git+https://github.com/Ujhhgtg/english-homework-helper.git
+
+# install optional dependencies for more features
+# refer to pyproject.toml for now
+pip install "ehh[transcription] @ git+https://github.com/Ujhhgtg/english-homework-helper.git"
+```
+
+#### B. From source, manually
+
+> [!NOTE]
+> Refer to [just docs](https://just.systems/man/en/packages.html) on installing just.
+
+```bash
+git clone https://github.com/Ujhhgtg/english-homework-helper.git
+cd english-homework-helper
+just build
+just install
+```
+
+### 3. Configure settings
 
 > [!NOTE]
 > Some configuration options are optional, however you won't be able to access advanced features if you skip them.
@@ -143,10 +156,15 @@ To use the AI-powered features, you'll need an API key from an LLM provider. Thi
 Run the main script:
 
 ```bash
-# browser version
-python cli_browser.py
 # api version
-python cli_api.py
+just run-api
+# --- or ---
+python -m ehh.cli_api
+
+# browser version
+python -m ehh.cli_browser
+# --- or ---
+just run-browser
 ```
 
 ## 🤝 Contributing

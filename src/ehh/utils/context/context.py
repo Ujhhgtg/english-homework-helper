@@ -1,7 +1,14 @@
-from typing import Optional, Any
+from typing import Optional
 
 import httpx
-import whisper
+
+try:
+    from whisper.model import Whisper  # type: ignore
+except ImportError:
+
+    class Whisper: ...
+
+
 from munch import Munch
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support.ui import WebDriverWait
@@ -13,7 +20,7 @@ class Context:
     def __init__(self, messenger: Messenger) -> None:
         self.messenger = messenger
         self.config: Munch = None  # type: ignore
-        self.whisper_model: Optional[whisper.model.Whisper] = None
+        self.whisper_model: Optional[Whisper] = None
         self.http_client: httpx.Client = httpx.Client(timeout=30)
 
 

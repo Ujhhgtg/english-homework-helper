@@ -41,7 +41,9 @@ def print_and_copy_path(path: str) -> None:
         print(f"<success> saved to file {path} (copied to clipboard)")
     except ImportError:
         print(f"<success> saved to file {path}")
-        print("<warning> pyperclip not installed, cannot copy path to clipboard")
+        print(
+            "<warning> pyperclip not installed, cannot copy path to clipboard; please install the 'clipboard' extra requirement"
+        )
 
 
 def patch_whisper_transcribe_progress():

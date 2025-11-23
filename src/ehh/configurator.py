@@ -6,7 +6,11 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List
 
-from textual.app import App, ComposeResult
+try:
+    from textual.app import App, ComposeResult
+except ImportError:
+    print("<error> textual not installed; please install the 'tui' extra requirement")
+    exit(1)
 from textual.widgets import Header, Footer, Static, Button, Input, Switch
 from textual.containers import Container, Horizontal
 from textual.widget import Widget

@@ -1,11 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import atexit
 import json
 import shlex
+import atexit
 from pathlib import Path
-from selenium.webdriver.support.ui import WebDriverWait
+
+try:
+    from textual import work
+except ImportError:
+    print("<error> textual not installed; please install the 'tui' extra requirement")
+    exit(1)
+from textual.binding import Binding
+from textual.containers import Container
 from textual.app import App, ComposeResult
 from textual.widgets import (
     Header,
@@ -16,9 +23,7 @@ from textual.widgets import (
     ListItem,
     Label,
 )
-from textual.containers import Container
-from textual.binding import Binding
-from textual import work
+from selenium.webdriver.support.ui import WebDriverWait
 
 from .models.homework_record import HomeworkRecord
 from .models.ai_client import AIClient
@@ -34,8 +39,6 @@ from . import globalvars
 
 
 class HomeworkRecordItem(ListItem):
-    """A custom list item to display a single HomeworkRecord."""
-
     def __init__(self, record: HomeworkRecord, index: int) -> None:
         super().__init__()
         self.record = record

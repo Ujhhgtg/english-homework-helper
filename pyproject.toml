@@ -17,19 +17,18 @@ dependencies = [
     "json5",
     "httpx",
     "httpx[socks]",
-    "pyperclip",
     "prompt_toolkit>=3,<4",
     "rich>=14,<15",
-    "openai-whisper",
+    "beautifulsoup4",
+    "selenium>=4,<5",
 ]
 
 [project.optional-dependencies]
-browser = ["selenium>=4,<5"]
-api = ["beautifulsoup4"]
 tui = ["textual>=6,<7"]
 dev = ["textual-dev"]
 telegram-bot = ["python-telegram-bot"]
 transcription = ["openai-whisper"]
+clipboard = ["pyperclip"]
 
 [project.urls]
 Homepage = "https://github.com/Ujhhgtg/english-homework-helper"

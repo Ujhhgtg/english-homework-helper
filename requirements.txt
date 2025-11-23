@@ -11,3 +11,4 @@ textual-dev
 httpx
 httpx[socks]
 beautifulsoup4
+pyperclip

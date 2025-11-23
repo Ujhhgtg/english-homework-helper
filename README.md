@@ -144,9 +144,9 @@ Run the main script:
 
 ```bash
 # browser version
-python console.py
+python cli_browser.py
 # api version
-python console_api.py
+python cli_api.py
 ```
 
 ## 🤝 Contributing

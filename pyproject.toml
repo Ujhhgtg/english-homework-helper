@@ -1,0 +1,36 @@
+[project]
+name = "ehh"
+version = "0.0.1"
+authors = [{ name = "Fey Xie", email = "feyxiexzf@gmail.com" }]
+description = "Utility for an english homework platform"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "GPL-3.0-or-later"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "munch",
+    "openai",
+    "json5",
+    "httpx",
+    "httpx[socks]",
+    "pyperclip",
+    "prompt_toolkit>=3,<4",
+    "rich>=14,<15",
+    "openai-whisper",
+]
+
+[project.optional-dependencies]
+browser = ["selenium>=4,<5"]
+api = ["beautifulsoup4"]
+tui = ["textual>=6,<7"]
+dev = ["textual-dev"]
+telegram-bot = ["python-telegram-bot"]
+transcription = ["openai-whisper"]
+
+[project.urls]
+Homepage = "https://github.com/Ujhhgtg/english-homework-helper"
+Issues = "https://github.com/Ujhhgtg/english-homework-helper/issues"

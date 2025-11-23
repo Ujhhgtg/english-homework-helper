@@ -68,7 +68,7 @@ just install
 > [!NOTE]
 > Some configuration options are optional, however you won't be able to access advanced features if you skip them.
 
-Rename `local/config.json.example` to `local/config.json` and fill it in.
+Rename `local/config.json.example` to `local/config.json` and fill it in. The script will automatically move it to an appropraite location.
 
 ## 🔑 Guide: How to use LLMs for free
 

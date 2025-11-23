@@ -19,6 +19,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
 )
+from munch import Munch
 
 
 from .models.homework_record import HomeworkRecord
@@ -38,7 +39,7 @@ from .tasks_api import (
     start_hw,
     login,
 )
-from .utils.config import load_config, save_config
+from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.api.constants import BASE_URL
 from .utils.crypto import encodeb64_safe
 from .utils.logging import print
@@ -49,7 +50,7 @@ from . import globalvars
 
 hw_list: list[HomeworkRecord] = []
 token: Optional[Token] = None
-config = load_config()
+config: Munch = None
 
 
 def _ensure_hw_list() -> bool:
@@ -724,6 +725,8 @@ def main():
         http_client=httpx.Client(base_url=BASE_URL),
     )
 
+    migrate_config_if_needed()
+    config = load_config()
     token = None
     try:
         sel = config.credentials.selected

@@ -30,7 +30,7 @@ from .models.ai_client import AIClient
 from .models.credentials import Credentials
 from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
-from .utils.config import load_config, save_config
+from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.logging import print, print_and_copy_path
 from .utils.context.context import Context
 from .utils.context.messenger import TextualMessenger
@@ -112,6 +112,7 @@ class HomeworkApp(App):
         print("<info> registered atexit handler")
         Path("./cache/").mkdir(parents=True, exist_ok=True)
         print("<info> created cache directory")
+        migrate_config_if_needed()
         globalvars.context.config = load_config()
         print("<info> loaded config file")
         match globalvars.context.config.browser.type:

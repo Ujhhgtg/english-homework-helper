@@ -20,7 +20,7 @@ from .utils.logging import print, print_and_copy_path, patch_whisper_transcribe_
 from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
 from .utils.prompt import LastWordCompleter
-from .utils.config import load_config, save_config
+from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.context.context import BrowserContext
 from .utils.context.messenger import ConsoleMessenger
 from .tasks_browser import *
@@ -53,6 +53,7 @@ def main():
     print("<info> registered atexit handler")
     Path("./cache/").mkdir(parents=True, exist_ok=True)
     print("<info> created cache directory")
+    migrate_config_if_needed()
     globalvars.context.config = load_config()
     print("<info> loaded config file")
     patch_whisper_transcribe_progress()

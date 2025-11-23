@@ -26,7 +26,7 @@ from .utils.logging import (
 from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
 from .utils.prompt import LastWordCompleter, prompt_for_yn
-from .utils.config import load_config, save_config
+from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.context.context import APIContext
 from .utils.context.messenger import ConsoleMessenger
 from .tasks_api import *
@@ -48,6 +48,7 @@ def main():
     print("<info> rich traceback installed")
     Path("./cache/").mkdir(parents=True, exist_ok=True)
     print("<info> created cache directory")
+    migrate_config_if_needed()
     globalvars.context.config = load_config()
     print("<info> loaded config file")
     patch_whisper_transcribe_progress()

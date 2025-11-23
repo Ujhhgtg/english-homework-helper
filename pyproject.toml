@@ -17,6 +17,7 @@ dependencies = [
     "json5",
     "httpx",
     "httpx[socks]",
+    "platformdirs",
     "prompt_toolkit>=3,<4",
     "rich>=14,<15",
     "beautifulsoup4",

@@ -24,24 +24,27 @@ A powerful command-line tool designed to automate login, homework list parsing, 
 
 You need to have Python 3.9+ and [just](https://github.com/casey/just) installed on your system. If you prefer the browser version, you also need a browser (Edge, Chrome, Firefox or Safari) installed.
 
-### 1. [Optional] Install PyTorch 
+### 1. [Optional] Install PyTorch
+
+> [!NOTE]
+> Refer to [just docs](https://just.systems/man/en/packages.html) on installing just.
 
 ```bash
 # Install PyTorch for GPU-accelerated Whisper audio transcription (highly recommended)
 # Choose the correct command based on your device/CUDA version (skip to fallback to CPU)
 # CUDA 12.6
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+just install-torch-cu126
 # CUDA 12.8 (Common for many systems)
-pip install torch torchvision
-# CUDA 12.9
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
+just install-torch-cu128
+# CUDA 13.0
+just install-torch-cu130
 # ROCm 6.4 (For some AMD GPUs)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.4
+just install-torch-rocm64
 ```
 
 ### 2. Install package
 
-#### A. From source, with Pip
+#### A. From source, with pip
 
 ```bash
 pip install git+https://github.com/Ujhhgtg/english-homework-helper.git
@@ -52,9 +55,6 @@ pip install "ehh[transcription] @ git+https://github.com/Ujhhgtg/english-homewor
 ```
 
 #### B. From source, manually
-
-> [!NOTE]
-> Refer to [just docs](https://just.systems/man/en/packages.html) on installing just.
 
 ```bash
 git clone https://github.com/Ujhhgtg/english-homework-helper.git

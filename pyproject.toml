@@ -29,6 +29,7 @@ tui = ["textual>=6,<7"]
 dev = ["textual-dev"]
 telegram-bot = ["python-telegram-bot"]
 transcription = ["openai-whisper"]
+transcription-accel = ["torch", "torchvision"]
 clipboard = ["pyperclip"]
 
 [project.urls]

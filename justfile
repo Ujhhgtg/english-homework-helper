@@ -48,7 +48,7 @@ install-torch-cu126:
     @echo "installed torch with CUDA 12.6 support"
 
 # install pytorch with cuda 12.8 support
-install-torch-cu128:8
+install-torch-cu128:
     pip install torch torchvision
     @echo "installed torch with CUDA 12.8 support"
 

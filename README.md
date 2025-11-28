@@ -22,24 +22,21 @@ A powerful command-line tool designed to automate login, homework list parsing, 
 
 ### Prerequisites
 
-You need to have Python 3.9+ and [just](https://github.com/casey/just) installed on your system. If you prefer the browser version, you also need a browser (Edge, Chrome, Firefox or Safari) installed.
+You need to have Python 3.9+ installed on your system. If you prefer the browser version, you also need a browser (Edge, Chrome, Firefox or Safari) installed.
 
 ### 1. [Optional] Install PyTorch
-
-> [!NOTE]
-> Refer to [just docs](https://just.systems/man/en/packages.html) on installing just.
 
 ```bash
 # Install PyTorch for GPU-accelerated Whisper audio transcription (highly recommended)
 # Choose the correct command based on your device/CUDA version (skip to fallback to CPU)
 # CUDA 12.6
-just install-torch-cu126
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 # CUDA 12.8 (Common for many systems)
-just install-torch-cu128
+pip install torch torchvision
 # CUDA 13.0
-just install-torch-cu130
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
 # ROCm 6.4 (For some AMD GPUs)
-just install-torch-rocm64
+pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.4
 ```
 
 ### 2. Install package
@@ -59,8 +56,9 @@ pip install "ehh[transcription] @ git+https://github.com/Ujhhgtg/english-homewor
 ```bash
 git clone https://github.com/Ujhhgtg/english-homework-helper.git
 cd english-homework-helper
-just build
-just install
+pip install build
+python -m build
+pip install ./dist/*.tar.gz
 ```
 
 ### 3. Configure settings
@@ -157,14 +155,10 @@ Run the main script:
 
 ```bash
 # api version
-just run-api
-# --- or ---
 python -m ehh.cli_api
 
 # browser version
 python -m ehh.cli_browser
-# --- or ---
-just run-browser
 ```
 
 ## 🤝 Contributing

@@ -7,13 +7,7 @@ from typing import Optional
 
 import httpx
 
-try:
-    from telegram import Update
-except ImportError:
-    print(
-        "<error> python-telegram-bot not installed; please install the 'telegram' extra requirement"
-    )
-    exit(1)
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -43,6 +37,7 @@ from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.api.constants import BASE_URL
 from .utils.crypto import encodeb64_safe
 from .utils.logging import print
+from .utils.fs import CACHE_DIR
 from .utils.context.context import APIContext
 from .utils.context.messenger import ConsoleMessenger, TelegramMessenger
 from . import globalvars
@@ -177,7 +172,7 @@ async def command_download_audio(
         )
         return
 
-    audio_path = Path(f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3")
+    audio_path = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
     if not audio_path.exists():
         await context.bot.send_message(
             chat_id=chat_id, text="Audio file not found after download."
@@ -227,7 +222,7 @@ async def command_transcribe_audio(
         return
 
     record = hw_list[idx]
-    audio_file = Path(f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3")
+    audio_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
     if not audio_file.exists():
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -300,7 +295,7 @@ async def command_download_text(
             chat_id=update.effective_chat.id, text=f"Failed to download text: {e}"
         )
         return
-    txt_path = Path(f"cache/homework_{encodeb64_safe(record.title)}_text.txt")
+    txt_path = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_text.txt"
     if txt_path.exists():
         await context.bot.send_document(
             chat_id=update.effective_chat.id,
@@ -354,7 +349,7 @@ async def command_download_answers(
             chat_id=update.effective_chat.id, text="No answers retrieved."
         )
         return
-    answers_file = Path(f"cache/homework_{encodeb64_safe(record.title)}_answers.json")
+    answers_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_answers.json"
     answers_file.write_text(
         json.dumps(answers, indent=4, ensure_ascii=False), encoding="utf-8"
     )
@@ -406,9 +401,10 @@ async def command_download_answers_paper(
             chat_id=update.effective_chat.id, text="No answers retrieved."
         )
         return
-    answers_file = Path(
-        f"cache/homework_{encodeb64_safe(record.title)}_answers_paper.json"
+    answers_file = (
+        CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_answers_paper.json"
     )
+
     answers_file.write_text(
         json.dumps(answers, indent=4, ensure_ascii=False), encoding="utf-8"
     )
@@ -472,9 +468,10 @@ async def command_generate_answers(
             chat_id=update.effective_chat.id, text="Failed to generate answers."
         )
         return
-    answers_file = Path(
-        f"cache/homework_{encodeb64_safe(record.title)}_answers_gen.json"
+    answers_file = (
+        CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_answers_gen.json"
     )
+
     answers_file.write_text(
         json.dumps(answers, indent=4, ensure_ascii=False), encoding="utf-8"
     )

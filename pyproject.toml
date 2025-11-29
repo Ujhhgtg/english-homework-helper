@@ -15,6 +15,7 @@ dependencies = [
     "munch",
     "openai",
     "json5",
+    "pyyaml",
     "httpx",
     "httpx[socks]",
     "platformdirs",

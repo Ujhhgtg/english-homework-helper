@@ -21,7 +21,7 @@ from .utils.constants import (
     GENERATE_ANSWERS_WITH_LISTENING_PROMPT,
 )
 from .utils.crypto import encodeb64_safe
-from .utils.fs import read_file_text
+from .utils.fs import read_file_text, CACHE_DIR
 from .utils.convert import mask_string_middle
 from .utils.logging import print, download_file_with_progress
 from .utils.webdriver import safe_find_element
@@ -252,7 +252,7 @@ def download_audio(index: int, record: HomeworkRecord):
             goto_hw_list_page()
             return
 
-        filename = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
+        filename = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
         try:
             print(f"<info> downloading audio from: {audio_url}")
             globalvars.context.messenger.send_progress(
@@ -271,7 +271,7 @@ def download_audio(index: int, record: HomeworkRecord):
 def transcribe_audio(index: int, record: HomeworkRecord):
     print(f"--- step: transcribe audio of index {index}: '{record.title}' ---")
 
-    audio_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
+    audio_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
 
     # if whisper_model is None:
     #     print("<info> loading Whisper model (this may take a while)...")
@@ -378,7 +378,7 @@ def download_text(index: int, record: HomeworkRecord):
         print(f"<error> failed to retrieve text content for index {index}")
         return
 
-    text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
+    text_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_text.txt"
     with open(text_file, "w", encoding="utf-8") as f:
         f.write(text_content)
     print_and_copy_path(text_file)
@@ -551,7 +551,9 @@ def generate_answers(
     has_audio = (
         safe_find_element(globalvars.context.driver, By.TAG_NAME, "audio") is not None
     )
-    transcription_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
+    transcription_file = (
+        CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
+    )
     if has_audio:
         if not Path(transcription_file).is_file():
             print(
@@ -561,7 +563,7 @@ def generate_answers(
     else:
         print("<info> homework item seems not to have listening part; skipping that")
 
-    text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
+    text_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_text.txt"
     if not Path(text_file).is_file():
         print("<error> text content does not exist; please download it first")
         return None

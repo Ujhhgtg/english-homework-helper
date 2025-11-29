@@ -1,6 +1,6 @@
 import re
 import time
-from pathlib import Path
+import random
 from typing import Optional
 
 import json5
@@ -14,7 +14,7 @@ from .utils.constants import (
 )
 from .utils.logging import print, download_file_with_progress, print_and_copy_path
 from .utils.crypto import get_md5_str_of_str, encodeb64_safe
-from .utils.fs import read_file_text
+from .utils.fs import read_file_text, CACHE_DIR
 from .models.api.school_info import SchoolInfo
 from .models.api.token import Token
 from .models.api.user_info import UserInfo
@@ -205,15 +205,23 @@ def get_answers(
         else:
             answer_type = "unknown"
 
+        answer_content = answer["standardAnswer"]
+        if (
+            answer_type == "fill-in-blanks"
+            and len(answer_content) >= 2
+            and "/" in answer_content
+        ):
+            answer_content = answer_content.split("/")
+
         answers.append(
             {
                 "index": index + 1,
                 "type": answer_type,
-                "content": answer["standardAnswer"],
+                "content": answer_content,
             }
         )
         print(
-            f"<success> extracted answer {index + 1}: Type='{answer_type}', Content='{answer['standardAnswer']}'"
+            f"<success> extracted answer {index + 1}: Type='{answer_type}', Content='{answer_content}'"
         )
 
     return answers
@@ -290,7 +298,7 @@ def download_audio(token: Token, record: HomeworkRecord) -> None:
         print("<error> failed to retrive audio url")
         return
 
-    path = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
+    path = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
     try:
         print(f"<info> downloading audio from: {audio_url}")
         globalvars.context.messenger.send_progress(
@@ -335,7 +343,7 @@ def download_text(token: Token, record: HomeworkRecord) -> None:
         print("<error> failed to get text content")
         return
 
-    text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
+    text_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_text.txt"
     with open(text_file, "w", encoding="utf-8") as f:
         f.write(text_content)
     print_and_copy_path(text_file)
@@ -344,7 +352,7 @@ def download_text(token: Token, record: HomeworkRecord) -> None:
 def transcribe_audio(record: HomeworkRecord):
     print(f"--- step: transcribe audio for '{record.title}' ---")
 
-    path = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
+    path = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
 
     # if whisper_model is None:
     #     print("<info> loading Whisper model (this may take a while)...")
@@ -445,9 +453,11 @@ def generate_answers(
     else:
         has_audio = _get_audio_url(token, record)
 
-    transcription_file = f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
+    transcription_file = (
+        CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3.txt"
+    )
     if has_audio:
-        if not Path(transcription_file).is_file():
+        if not transcription_file.is_file():
             print(
                 "<error> transcription does not exist; please transcribe the audio first"
             )
@@ -455,8 +465,8 @@ def generate_answers(
     else:
         print("<info> homework item seems not to have listening part; skipping that")
 
-    text_file = f"cache/homework_{encodeb64_safe(record.title)}_text.txt"
-    if not Path(text_file).is_file():
+    text_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_text.txt"
+    if not text_file.is_file():
         print("<error> text content does not exist; please download it first")
         return None
 
@@ -509,6 +519,10 @@ def generate_answers(
                 if answer["type"] != "fill-in-blanks":
                     post_process_count += 1
                     answer["type"] = "fill-in-blanks"
+                else:
+                    if "/" in answer["content"]:
+                        post_process_count += 1
+                        answer["content"] = answer["content"].split("/")
             elif "A" <= answer["content"].upper() <= "D":
                 post_process_count += 1
                 answer["type"] = "choice|fill-in-blanks"
@@ -565,19 +579,25 @@ def fill_in_answers(token: Token, record: HomeworkRecord, answers: list[dict]) -
         return
 
     # TODO: verify answer type n more
-    payload = {
-        "answers": list(
-            map(
-                lambda qna: {
-                    "attachmentId": "",
-                    "tagId": qna[0]["id"],
-                    "text": qna[1]["content"],
-                },
-                zip(questions, answers),
+    answers_payload = []
+    for q, a in zip(questions, answers):
+        answer_content = a["content"]
+
+        if isinstance(answer_content, list):
+            answer_content = random.choice(answer_content)
+            print(
+                f"<info> randomly selected answer {answer_content} from list of answers {a['content']}"
             )
-        ),
-        "id": record.api_id,
-    }
+
+        answers_payload.append(
+            {
+                "attachmentId": "",
+                "tagId": q["id"],
+                "text": answer_content,
+            }
+        )
+
+    payload = {"answers": answers_payload, "id": record.api_id}
 
     response = globalvars.context.http_client.post(
         SAVE_ANSWERS_CACHE_URL, json=payload, headers=headers
@@ -599,7 +619,7 @@ def _get_answer_type(id: str):
 
 
 def _get_answers_cache(token: Token, record: HomeworkRecord) -> Optional[list[dict]]:
-    print(f"--- step: retrieve answers from paper for '{record.title}' ---")
+    print(f"--- step: retrieve answers cache for '{record.title}' ---")
 
     headers = _get_headers(token)
     if headers is None:
@@ -641,17 +661,29 @@ def get_paper_answers(token: Token, record: HomeworkRecord) -> Optional[list[dic
         print("<error> failed to get questions")
         return
 
-    return list(
-        map(
-            lambda q: {
+    result: list[dict] = []
+    for q in questions:
+        answer_type = _get_answer_type(q["id"])
+        answer_content = q["answer"]
+        if (
+            answer_type == "fill-in-blanks"
+            and len(answer_content) >= 2
+            and "/" in answer_content
+        ):
+            answer_content = answer_content.split("/")
+
+        print(
+            f"<success> extracted answer {q["index"]}: Type='{answer_type}', Content='{answer_content}'"
+        )
+        result.append(
+            {
                 "index": q["index"],
                 "id": q["id"],
                 "type": _get_answer_type(q["id"]),
                 "content": q["answer"],
-            },
-            questions,
+            }
         )
-    )
+    return result
 
 
 def submit_answers(token: Token, record: HomeworkRecord) -> None:

@@ -1,35 +1,46 @@
-import json
 from pathlib import Path
 
+import yaml
 import json5
 from munch import Munch, munchify
-from platformdirs import user_config_dir
 
 from .logging import print
+from .fs import CONFIG_DIR
 
-CONFIG_DIR = user_config_dir(appname="ehh", appauthor="ujhhgtg", ensure_exists=True)
-CONFIG_FILE = str(Path(CONFIG_DIR) / "config.json")
+CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
 
-def load_config(path: str = CONFIG_FILE) -> Munch:
-    if not Path(path).exists():
+def load_config(path: str | Path = CONFIG_FILE) -> Munch:
+    if isinstance(path, str):
+        path = Path(path)
+
+    if not path.exists():
         raise FileNotFoundError(
             f"Config file not found at {path}. Please create one based on config.json.example."
         )
 
     with open(path, "rt", encoding="utf-8") as f:
-        return munchify(json5.load(f))  # type: ignore
+        return munchify(yaml.load(f, Loader=yaml.FullLoader))  # type: ignore
 
 
-def save_config(config: Munch, path: str = CONFIG_FILE) -> None:
+def save_config(config: Munch, path: str | Path = CONFIG_FILE) -> None:
     with open(path, "wt", encoding="utf-8") as f:
-        f.write(json.dumps(config, indent=4, ensure_ascii=False))
+        f.write(yaml.dump(munchify(config), allow_unicode=True, indent=2))
 
 
 def migrate_config_if_needed() -> None:
-    old_config_path = "local/config.json"
-    if Path(old_config_path).exists() and not Path(CONFIG_FILE).exists():
+    old_config_path = Path("local/config.json")
+    if old_config_path.exists() and not CONFIG_FILE.exists():
+        with open(old_config_path, "rt", encoding="utf-8") as f:
+            config = json5.load(f)
+        save_config(config, CONFIG_FILE)
+        old_config_path.unlink()
+        print("<info> migrated config to new location")
+        return
+
+    old_config_path = CONFIG_DIR / "config.json"
+    if old_config_path.exists() and not CONFIG_FILE.exists():
         config = load_config(old_config_path)
         save_config(config, CONFIG_FILE)
-        Path(old_config_path).unlink()
-        print("<info> migrated config to new location")
+        old_config_path.unlink()
+        print("<info> migrated config to new format")

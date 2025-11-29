@@ -1,10 +1,10 @@
 import inspect
+from pathlib import Path
 
-import whisper
 from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
 from .. import globalvars
-
+from . import feature_flags
 
 _original_print = print
 
@@ -32,21 +32,31 @@ def download_file_with_progress(progress, url: str, filename: str):
                     progress.update(task_id, advance=len(chunk))
 
 
-def print_and_copy_path(path: str) -> None:
-    try:
+def print_and_copy_path(path: str | Path) -> None:
+    if isinstance(path, Path):
+        path = str(path)
+
+    if feature_flags.PYPERCLIP:
         import pyperclip
 
         pyperclip.copy(path)
 
-        print(f"<success> saved to file {path} (copied to clipboard)")
-    except ImportError:
-        print(f"<success> saved to file {path}")
-        print(
-            "<warning> pyperclip not installed, cannot copy path to clipboard; please install the 'clipboard' extra requirement"
-        )
+    print(
+        f"<success> saved to file '{path}'{" (path copied to clipboard)" if feature_flags.PYPERCLIP else ""}"
+    )
+    if not feature_flags.PYPERCLIP:
+        print("<warning> pyperclip not installed, cannot copy path to clipboard")
 
 
 def patch_whisper_transcribe_progress():
+    if not feature_flags.WHISPER:
+        print(
+            "<warning> whisper is not installed; not patching whisper transcribe progress"
+        )
+        return
+
+    import whisper
+
     original_source = inspect.getsource(whisper.transcribe)
 
     tqdm_ctx_line = """
@@ -89,4 +99,3 @@ def patch_whisper_transcribe_progress():
 
     func = execution_scope["transcribe"]
     whisper.model.Whisper.transcribe = func
-    return func

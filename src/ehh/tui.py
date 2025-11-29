@@ -6,11 +6,7 @@ import shlex
 import atexit
 from pathlib import Path
 
-try:
-    from textual import work
-except ImportError:
-    print("<error> textual not installed; please install the 'tui' extra requirement")
-    exit(1)
+from textual import work
 from textual.binding import Binding
 from textual.containers import Container
 from textual.app import App, ComposeResult
@@ -34,6 +30,7 @@ from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.logging import print, print_and_copy_path
 from .utils.context.context import Context
 from .utils.context.messenger import TextualMessenger
+from .utils.fs import CACHE_DIR
 from .tasks_browser import *
 from . import globalvars
 
@@ -110,8 +107,6 @@ class HomeworkApp(App):
 
         atexit.register(self._at_exit)
         print("<info> registered atexit handler")
-        Path("./cache/").mkdir(parents=True, exist_ok=True)
-        print("<info> created cache directory")
         migrate_config_if_needed()
         globalvars.context.config = load_config()
         print("<info> loaded config file")
@@ -283,7 +278,7 @@ class HomeworkApp(App):
                     download_audio(index, record)
                 elif subcommand == "transcribe":
                     audio_file = (
-                        f"cache/homework_{encodeb64_safe(record.title)}_audio.mp3"
+                        CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
                     )
                     if not Path(audio_file).is_file():
                         print(
@@ -342,7 +337,7 @@ class HomeworkApp(App):
                         answers_input = args[2]
                         answers = json.loads(answers_input)
                         fill_in_answers(index, record, answers)
-                        print("[success] Answers filled in successfully.")
+                        print("<success> Answers filled in successfully")
                     except json.JSONDecodeError:
                         print("<error> Invalid JSON format for answers.")
                     except Exception as e:
@@ -355,7 +350,8 @@ class HomeworkApp(App):
                         return
 
                     answers_file = (
-                        f"cache/homework_{encodeb64_safe(record.title)}_answers.json"
+                        CACHE_DIR
+                        / f"homework_{encodeb64_safe(record.title)}_answers.json"
                     )
                     with open(answers_file, "wt", encoding="utf-8") as f:
                         f.write(json.dumps(answers, indent=4, ensure_ascii=False))
@@ -370,7 +366,10 @@ class HomeworkApp(App):
                         print("<error> failed to generate answers")
                         return
 
-                    answers_file = f"cache/homework_{encodeb64_safe(record.title)}_answers_gen.json"
+                    answers_file = (
+                        CACHE_DIR
+                        / f"homework_{encodeb64_safe(record.title)}_answers_gen.json"
+                    )
                     with open(answers_file, "wt", encoding="utf-8") as f:
                         f.write(json.dumps(answers, indent=4, ensure_ascii=False))
                     print_and_copy_path(answers_file)

@@ -12,3 +12,4 @@ httpx
 httpx[socks]
 beautifulsoup4
 pyperclip
+pyyaml

@@ -29,8 +29,10 @@ from .utils.prompt import LastWordCompleter, prompt_for_yn
 from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.context.context import APIContext
 from .utils.context.messenger import ConsoleMessenger
+from .utils.fs import CACHE_DIR
 from .tasks_api import *
 from .tasks_browser import print_hw_list
+from .utils import feature_flags
 from . import globalvars
 
 
@@ -46,11 +48,10 @@ def main():
     print("--- step: initialize ---")
     traceback.install()
     print("<info> rich traceback installed")
-    Path("./cache/").mkdir(parents=True, exist_ok=True)
-    print("<info> created cache directory")
     migrate_config_if_needed()
     globalvars.context.config = load_config()
     print("<info> loaded config file")
+    feature_flags.init()
     patch_whisper_transcribe_progress()
     print("<info> patched whisper.transcribe to use rich console")
 
@@ -164,8 +165,11 @@ def main():
                             download_audio(token, hw_list[index])
 
                         case "transcribe":
-                            audio_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_audio.mp3"
-                            if not Path(audio_file).is_file():
+                            audio_file = (
+                                CACHE_DIR
+                                / f"homework_{encodeb64_safe(hw_list[index].title)}_audio.mp3"
+                            )
+                            if not audio_file.is_file():
                                 print(
                                     f"<error> audio file for index {index} not found; please download it first"
                                 )
@@ -249,7 +253,10 @@ def main():
                                 )
                                 continue
 
-                            answers_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_answers.json"
+                            answers_file = (
+                                CACHE_DIR
+                                / f"homework_{encodeb64_safe(hw_list[index].title)}_answers.json"
+                            )
                             with open(answers_file, "wt", encoding="utf-8") as f:
                                 f.write(
                                     json.dumps(answers, indent=4, ensure_ascii=False)
@@ -268,7 +275,10 @@ def main():
                                 )
                                 continue
 
-                            answers_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_answers_paper.json"
+                            answers_file = (
+                                CACHE_DIR
+                                / f"homework_{encodeb64_safe(hw_list[index].title)}_answers_paper.json"
+                            )
                             with open(answers_file, "wt", encoding="utf-8") as f:
                                 f.write(
                                     json.dumps(answers, indent=4, ensure_ascii=False)
@@ -297,7 +307,10 @@ def main():
                                 print("<error> failed to generate answers")
                                 continue
 
-                            answers_file = f"cache/homework_{encodeb64_safe(hw_list[index].title)}_answers_gen.json"
+                            answers_file = (
+                                CACHE_DIR
+                                / f"homework_{encodeb64_safe(hw_list[index].title)}_answers_gen.json"
+                            )
                             with open(answers_file, "wt", encoding="utf-8") as f:
                                 f.write(
                                     json.dumps(answers, indent=4, ensure_ascii=False)

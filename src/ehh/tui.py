@@ -559,7 +559,7 @@ class HomeworkApp(App):
                                 client_conf.model.selected = model_choice
                                 self.ai_client.selected_model_index = model_choice
                                 print(
-                                    f"<info> selected AI model: {self.ai_client.selected_model()}"
+                                    f"<info> selected AI model: {self.ai_client.selected_model}"
                                 )
                                 break
                     else:

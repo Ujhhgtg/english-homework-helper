@@ -581,7 +581,7 @@ def generate_answers(
     print("<info> requesting model for a response (this may take a while)...")
     try:
         response = client.client.chat.completions.create(
-            model=client.selected_model(),
+            model=client.selected_model,
             messages=[
                 {
                     "role": "system",

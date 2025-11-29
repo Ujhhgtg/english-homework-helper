@@ -32,5 +32,6 @@ class AIClient:
     def describe(self) -> str:
         return f"{self.type}: {self.api_url} / {mask_string_middle(self.api_key)} / {self.models}"
 
+    @property
     def selected_model(self) -> str:
         return self.models[self.selected_model_index]

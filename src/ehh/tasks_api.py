@@ -483,7 +483,7 @@ def generate_answers(
     print("<info> requesting model for a response (this may take a while)...")
     try:
         response = client.client.chat.completions.create(
-            model=client.selected_model(),
+            model=client.selected_model,
             messages=[
                 {
                     "role": "system",
@@ -578,7 +578,6 @@ def fill_in_answers(token: Token, record: HomeworkRecord, answers: list[dict]) -
         )
         return
 
-    # TODO: verify answer type n more
     answers_payload = []
     for q, a in zip(questions, answers):
         answer_content = a["content"]

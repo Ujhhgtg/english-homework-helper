@@ -449,7 +449,7 @@ def main():
                             ai_client_conf.model.selected = model_choice
                             ai_client.selected_model_index = model_choice
                             print(
-                                f"<info> selected AI model: {ai_client.selected_model()}"
+                                f"<info> selected AI model: {ai_client.selected_model}"
                             )
                         case _:
                             print("<error> argument invalid")

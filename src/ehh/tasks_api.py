@@ -199,7 +199,7 @@ def get_answers(
     answers = []
     for index, answer in enumerate(hw["subResults"]):
         if answer["tagId"].startswith("radio"):
-            answer_type = "radio"
+            answer_type = "choice"
         elif answer["tagId"].startswith("text"):
             answer_type = "fill-in-blanks"
         else:
@@ -221,7 +221,7 @@ def get_answers(
             }
         )
         print(
-            f"<success> extracted answer {index + 1}: Type='{answer_type}', Content='{answer_content}'"
+            f"<info> extracted answer {index + 1}: Type='{answer_type}', Content='{answer_content}'"
         )
 
     return answers
@@ -284,7 +284,7 @@ def _get_audio_url(token: Token, record: HomeworkRecord) -> Optional[str]:
     soup = BeautifulSoup(paper["content"], "html.parser")
     audio_tag = soup.find("audio")
     if audio_tag is None:
-        print("<error> audio tag not found in homework paper")
+        print("<warning> audio tag not found in homework paper")
         return None
 
     return str(audio_tag.get("src"))
@@ -410,7 +410,7 @@ def transcribe_audio(record: HomeworkRecord):
     start = time.perf_counter()
     print(f"<info> transcribing audio file: {path} (this may take a while)...")
     result = globalvars.context.whisper_model.transcribe(
-        path, language="en", verbose=False
+        str(path), language="en", verbose=False
     )
     end = time.perf_counter()
     print(f"<info> transcription completed in {end - start:.2f} seconds")
@@ -499,6 +499,16 @@ def generate_answers(
         )
     except openai.APIError as e:
         print(f"<error> api returned error: {e}")
+        if (
+            e.body is not None
+            and e.body.get("error", None)
+            and e.body["error"].get("message", None)
+        ):
+            if (
+                e.body["error"]["message"]
+                == "User location is not supported for the API use."
+            ):
+                print("<tip> try changing your proxy endpoint to a different location")
         return None
 
     raw_data = response.choices[0].message.content
@@ -554,7 +564,12 @@ def _create_answers_payload(record: HomeworkRecord, answers: list[dict]) -> dict
     }
 
 
-def fill_in_answers(token: Token, record: HomeworkRecord, answers: list[dict]) -> None:
+def fill_in_answers(
+    token: Token,
+    record: HomeworkRecord,
+    answers: list[dict],
+    expected_correct_rate: Optional[float] = None,
+) -> None:
     print(f"--- step: fill in answers for '{record.title}' ---")
 
     headers = _get_headers(token)
@@ -578,6 +593,46 @@ def fill_in_answers(token: Token, record: HomeworkRecord, answers: list[dict]) -
         )
         return
 
+    if expected_correct_rate is not None:
+        total_questions = len(questions)
+        total_choices = sum(1 for a in answers if a["type"] == "choice")
+        expected_wrong_questions = int(total_questions * (1.0 - expected_correct_rate))
+        expected_wrong_choices = int(total_choices * (1.0 - expected_correct_rate))
+        if total_choices < expected_wrong_questions:
+            print(
+                f"<error> not enough choices ({total_choices}) to be wrong ({expected_wrong_questions})"
+            )
+            return
+
+        if expected_wrong_choices > 0:
+            print(
+                f"<info> questions: {total_questions}; choices: {total_choices}; expected wrong questions: {expected_wrong_questions}; expected wrong choices: {expected_wrong_choices}"
+            )
+            print(
+                f"<info> adjusting answers to achieve expected correctness rate of {expected_correct_rate*100:.2f}%..."
+            )
+            wrong_answer_indices = sorted(
+                random.sample(
+                    [i for i, a in enumerate(answers) if a["type"] == "choice"],
+                    expected_wrong_choices,
+                )
+            )
+            print(
+                f"<info> selected question indices for wrong answers: {wrong_answer_indices}"
+            )
+            for i in wrong_answer_indices:
+                q = questions[i]
+                a = answers[i]
+                if a["type"] == "choice" and expected_wrong_choices > 0:
+                    original_answer = a["content"].upper()
+                    wrong_option = random.choice(
+                        [opt for opt in ["A", "B", "C", "D"] if opt != original_answer]
+                    )
+                    answers[i]["content"] = wrong_option
+                    print(
+                        f"<info> changed answer for question {q['index']} from '{original_answer}' to '{a['content']}' to reduce correctness rate"
+                    )
+
     answers_payload = []
     for q, a in zip(questions, answers):
         answer_content = a["content"]
@@ -585,7 +640,7 @@ def fill_in_answers(token: Token, record: HomeworkRecord, answers: list[dict]) -
         if isinstance(answer_content, list):
             answer_content = random.choice(answer_content)
             print(
-                f"<info> randomly selected answer {answer_content} from list of answers {a['content']}"
+                f"<info> randomly selected answer '{answer_content}' from list of answers {a['content']}"
             )
 
         answers_payload.append(
@@ -606,7 +661,7 @@ def fill_in_answers(token: Token, record: HomeworkRecord, answers: list[dict]) -
         print(f"<error> failed to fill in answers: {data}")
         return
 
-    print("<info> all answers filled in; please review and submit manually")
+    print("<success> all answers filled in; please review and submit manually")
 
 
 def _get_answer_type(id: str):
@@ -672,7 +727,7 @@ def get_paper_answers(token: Token, record: HomeworkRecord) -> Optional[list[dic
             answer_content = answer_content.split("/")
 
         print(
-            f"<success> extracted answer {q["index"]}: Type='{answer_type}', Content='{answer_content}'"
+            f"<info> extracted answer {q["index"]}: Type='{answer_type}', Content='{answer_content}'"
         )
         result.append(
             {
@@ -728,3 +783,27 @@ def start_hw(token: Token, record: HomeworkRecord) -> None:
         return
 
     print("<success> homework started")
+
+
+def print_hw_list(hw_list: list[HomeworkRecord]) -> None:
+    globalvars.context.messenger.send_table(
+        title="Homework List",
+        show_header=True,
+        columns=[
+            ("Index", "cyan", "right"),
+            ("Title", "magenta", "left"),
+            ("Status", "yellow"),
+            ("Score", "red", "center"),
+        ],
+        rows=list(
+            map(
+                lambda enum_obj: (
+                    str(enum_obj[0]),
+                    enum_obj[1].title,
+                    f"{enum_obj[1].status} ({enum_obj[1].status.value[1]})",  # type: ignore
+                    f"{enum_obj[1].current_score}/{enum_obj[1].total_score}",
+                ),
+                enumerate(hw_list),
+            )
+        ),
+    )

@@ -271,7 +271,7 @@ def download_audio(index: int, record: HomeworkRecord):
 def transcribe_audio(index: int, record: HomeworkRecord):
     print(f"--- step: transcribe audio of index {index}: '{record.title}' ---")
 
-    audio_file = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
+    path = CACHE_DIR / f"homework_{encodeb64_safe(record.title)}_audio.mp3"
 
     # if whisper_model is None:
     #     print("<info> loading Whisper model (this may take a while)...")
@@ -326,16 +326,16 @@ def transcribe_audio(index: int, record: HomeworkRecord):
     else:
         print("<info> Whisper model already loaded")
 
-    print(f"<info> transcribing audio file: {audio_file} (this may take a while)...")
+    print(f"<info> transcribing audio file: {path} (this may take a while)...")
     result = globalvars.context.whisper_model.transcribe(
-        audio_file, language="en", verbose=False
+        str(path), language="en", verbose=False
     )
     transcription = result.get("text", None)
     if transcription is None or (transcription is str and transcription.strip() == ""):
         print(f"<error> transcription failed or returned empty result")
         return
 
-    transcription_file = f"{audio_file}.txt"
+    transcription_file = f"{path}.txt"
     with open(transcription_file, "w", encoding="utf-8") as f:
         if isinstance(transcription, str):
             f.write(transcription)

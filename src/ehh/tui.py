@@ -28,8 +28,8 @@ from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
 from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.logging import print, print_and_copy_path
-from .utils.context.context import Context
-from .utils.context.messenger import TextualMessenger
+from .utils.context.base import Context
+from .utils.context.impl.textual_messenger import TextualMessenger
 from .utils.fs import CACHE_DIR
 from .tasks_browser import *
 from . import globalvars

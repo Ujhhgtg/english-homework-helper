@@ -21,11 +21,10 @@ from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
 from .utils.prompt import LastWordCompleter
 from .utils.config import load_config, save_config, migrate_config_if_needed
-from .utils.context.context import BrowserContext
-from .utils.context.messenger import ConsoleMessenger
+from .utils.context.impl.browser_context import BrowserContext
+from .utils.context.impl.console_messenger import ConsoleMessenger
 from .utils.fs import CACHE_DIR
 from .tasks_browser import *
-from .utils import feature_flags
 from . import globalvars
 
 
@@ -56,7 +55,6 @@ def main():
     migrate_config_if_needed()
     globalvars.context.config = load_config()
     print("<info> loaded config file")
-    feature_flags.init()
     patch_whisper_transcribe_progress()
     print("<info> patched whisper.transcribe to use rich console")
 

@@ -38,8 +38,9 @@ from .utils.api.constants import BASE_URL
 from .utils.crypto import encodeb64_safe
 from .utils.logging import print
 from .utils.fs import CACHE_DIR
-from .utils.context.context import APIContext
-from .utils.context.messenger import ConsoleMessenger, TelegramMessenger
+from .utils.context.impl.api_context import APIContext
+from .utils.context.impl.console_messenger import ConsoleMessenger
+from .utils.context.impl.telegram_messenger import TelegramMessenger
 from . import globalvars
 
 

@@ -4,7 +4,6 @@
 
 import json
 import shlex
-from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -27,12 +26,10 @@ from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
 from .utils.prompt import LastWordCompleter, prompt_for_yn
 from .utils.config import load_config, save_config, migrate_config_if_needed
-from .utils.context.context import APIContext
-from .utils.context.messenger import ConsoleMessenger
+from .utils.context.impl.api_context import APIContext
+from .utils.context.impl.console_messenger import ConsoleMessenger
 from .utils.fs import CACHE_DIR
 from .tasks_api import *
-from .tasks_browser import print_hw_list
-from .utils import feature_flags
 from . import globalvars
 
 
@@ -51,7 +48,6 @@ def main():
     migrate_config_if_needed()
     globalvars.context.config = load_config()
     print("<info> loaded config file")
-    feature_flags.init()
     patch_whisper_transcribe_progress()
     print("<info> patched whisper.transcribe to use rich console")
 
@@ -229,17 +225,39 @@ def main():
                                 HomeworkStatus.NOT_COMPLETED,
                                 HomeworkStatus.MAKE_UP,
                             ]:
-                                print(
-                                    "<info> starting hw since it's not completed or needs makeup"
+                                should_start = prompt_for_yn(
+                                    session,
+                                    "homework not completed or needs makeup; start it now? ",
                                 )
-                                start_hw(token, hw_list[index])
+                                if should_start:
+                                    start_hw(token, hw_list[index])
 
                             answers_input = session.prompt(
                                 "answers file (relative path is ok): "
                             ).strip()
                             with open(answers_input, "rt", encoding="utf-8") as f:
                                 answers = json.load(f)
-                            fill_in_answers(token, hw_list[index], answers)
+                            expected_correct_rate_input = session.prompt(
+                                "expected correct rate (0.0-1.0, default 1.0): "
+                            ).strip()
+                            expected_correct_rate = None
+                            if expected_correct_rate_input != "":
+                                try:
+                                    expected_correct_rate = float(
+                                        expected_correct_rate_input
+                                    )
+                                except Exception:
+                                    print("<error> invalid correct rate input")
+                                    continue
+                                if (
+                                    not (0.0 <= expected_correct_rate <= 1.0)
+                                    or expected_correct_rate is None
+                                ):
+                                    print("<error> correct rate out of range")
+                                    continue
+                            fill_in_answers(
+                                token, hw_list[index], answers, expected_correct_rate
+                            )
 
                         case "download":
                             if token is None:
@@ -530,6 +548,10 @@ def main():
 
         except KeyboardInterrupt:
             print("<warning> interrupted")
+
+        except Exception as e:
+            print("<error> an unexpected error occurred:")
+            globalvars.context.messenger.send_exception(e)
 
 
 if __name__ == "__main__":

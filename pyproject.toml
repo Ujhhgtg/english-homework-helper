@@ -22,15 +22,14 @@ dependencies = [
     "prompt_toolkit>=3,<4",
     "rich>=14,<15",
     "beautifulsoup4",
-    "selenium>=4,<5",
 ]
 
 [project.optional-dependencies]
+cli-browser = ["selenium>=4,<5"]
 tui = ["textual>=6,<7"]
 dev = ["textual-dev"]
-telegram-bot = ["python-telegram-bot"]
+tg-bot = ["python-telegram-bot"]
 transcription = ["openai-whisper"]
-transcription-accel = ["torch", "torchvision"]
 clipboard = ["pyperclip"]
 
 [project.urls]

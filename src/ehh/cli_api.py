@@ -24,7 +24,7 @@ from .utils.logging import (
 )
 from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
-from .utils.prompt import LastWordCompleter, prompt_for_yn
+from .utils.prompt import ReplCompleter, prompt_for_yn
 from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.context.impl.api_context import APIContext
 from .utils.context.impl.console_messenger import ConsoleMessenger
@@ -101,7 +101,7 @@ def main():
         user_input = (
             session.prompt(
                 "ehh> ",
-                completer=LastWordCompleter(COMPLETION_WORD_MAP),
+                completer=ReplCompleter(COMPLETION_WORD_MAP),
             )
             .strip()
             .lower()

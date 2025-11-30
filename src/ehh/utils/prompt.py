@@ -1,31 +1,47 @@
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.validation import Validator, ValidationError
+from prompt_toolkit.document import Document
 
 
-class LastWordCompleter(Completer):
-    def __init__(self, word_map: dict, case_insensitive=False) -> None:
-        super().__init__()
-        self.word_map = word_map
-        self.case_insensitive = case_insensitive
+# Powered by Google Gemini
+class ReplCompleter(Completer):
+    def __init__(self, completion_map):
+        self.completion_map = completion_map
 
-    def get_completions(self, document, complete_event):
+    def get_completions(self, document: Document, complete_event):
+        # Get text before the cursor
         text_before_cursor = document.text_before_cursor
-        words = tuple(text_before_cursor.split())
 
-        options = []
-        for length in range(len(words), -1, -1):
-            prefix = words[:length] if length else ()
-            if prefix in self.word_map:
-                options = self.word_map[prefix]
-                break
+        # Split input into words to determine context
+        words = text_before_cursor.split()
 
-        current = document.get_word_under_cursor()
-        cur_check = current.lower() if self.case_insensitive else current
-        for opt in options:
-            opt_check = opt.lower() if self.case_insensitive else opt
-            if opt_check.startswith(cur_check):
-                yield Completion(opt, start_position=-len(current))
+        # Logic to determine 'context' (previous words) and 'current_word' (being typed)
+        if text_before_cursor.endswith(" "):
+            # If the user typed a space, they are ready for the next word.
+            # Context is all words typed so far.
+            context = tuple(words)
+            current_word = ""
+        else:
+            if not words:
+                # Empty input
+                context = ()
+                current_word = ""
+            else:
+                # User is currently typing the last word in the list.
+                # Context is everything up to that last word.
+                context = tuple(words[:-1])
+                current_word = words[-1]
+
+        # Fetch valid completions for this context
+        # If the context doesn't exist in the map, we return an empty list
+        suggestions = self.completion_map.get(context, [])
+
+        # Yield completions that match the current partial word
+        for option in suggestions:
+            if option.startswith(current_word):
+                # start_position is negative length of the characters to replace
+                yield Completion(option, start_position=-len(current_word))
 
 
 class YesNoValidator(Validator):

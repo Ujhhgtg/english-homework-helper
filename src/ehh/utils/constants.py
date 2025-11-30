@@ -10,58 +10,12 @@ COMPLETION_WORD_MAP = {
         "config",
         "exit",
     ],
-    ("list",): [],
     ("audio",): ["download", "transcribe"],
-    (
-        "audio",
-        "download",
-    ): [],
-    (
-        "audio",
-        "transcribe",
-    ): [],
     ("text",): ["display", "download"],
-    (
-        "text",
-        "display",
-    ): [],
-    (
-        "text",
-        "download",
-    ): [],
     ("answers",): ["download", "fill_in", "generate", "download_from_paper", "submit"],
-    ("answers", "download"): [],
-    ("answers", "fill_in"): [],
-    ("answers", "generate"): [],
-    ("answers", "download_from_paper"): [],
-    ("answers", "submit"): [],
-    ("help",): [],
     ("account",): ["login", "logout", "select_default"],
-    (
-        "account",
-        "login",
-    ): [],
-    (
-        "account",
-        "logout",
-    ): [],
-    (
-        "account",
-        "select_default",
-    ): [],
     ("ai",): ["select_api", "select_model"],
-    ("ai", "select_api"): [],
-    ("ai", "select_model"): [],
     ("config",): ["reload", "save"],
-    (
-        "config",
-        "reload",
-    ): [],
-    (
-        "config",
-        "save",
-    ): [],
-    ("exit",): [],
 }
 
 

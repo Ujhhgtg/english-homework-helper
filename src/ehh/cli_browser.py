@@ -19,7 +19,7 @@ from .utils.browser.constants import *
 from .utils.logging import print, print_and_copy_path, patch_whisper_transcribe_progress
 from .utils.convert import try_parse_int
 from .utils.crypto import encodeb64_safe
-from .utils.prompt import LastWordCompleter
+from .utils.prompt import ReplCompleter
 from .utils.config import load_config, save_config, migrate_config_if_needed
 from .utils.context.impl.browser_context import BrowserContext
 from .utils.context.impl.console_messenger import ConsoleMessenger
@@ -151,7 +151,7 @@ def main():
         user_input = (
             session.prompt(
                 "ehh> ",
-                completer=LastWordCompleter(COMPLETION_WORD_MAP),
+                completer=ReplCompleter(COMPLETION_WORD_MAP),
             )
             .strip()
             .lower()

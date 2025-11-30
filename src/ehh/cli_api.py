@@ -9,6 +9,7 @@ from typing import Optional
 import httpx
 from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts import choice
+from prompt_toolkit.shortcuts import CompleteStyle
 from rich import traceback
 
 from .models.homework_record import HomeworkRecord
@@ -91,8 +92,9 @@ def main():
                     print_hw_list(hw_list)
         else:
             print(
-                f"<warning> default credentials index {sel_index} out of range; not logging in"
+                f"<warning> default credentials index {sel_index} out of range; resetting default creds and not logging in"
             )
+            globalvars.context.config.credentials.selected = None
     else:
         print(f"<warning> no default credentials provided; not logging in")
 
